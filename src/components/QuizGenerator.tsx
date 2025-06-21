@@ -49,6 +49,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
   const [showNewQuizConfirmation, setShowNewQuizConfirmation] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
+  const [videoGenerationProgress, setVideoGenerationProgress] = useState<string>('');
   const [quizSettings, setQuizSettings] = useState({
     questionCount: 10,
     difficulty: 'mixed',
@@ -132,7 +133,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
     }
   };
 
-  // Navigate to video page
+  // Navigate to video page with enhanced progress tracking
   const handleNavigateToVideo = async () => {
     if (!generatedQuiz) return;
 
@@ -149,14 +150,36 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
       return;
     }
 
-    // Generate video and then navigate
+    // Generate video with progress tracking
     setIsGeneratingVideo(true);
+    setVideoGenerationProgress('Initializing video generation...');
+    
     try {
+      // Show progress updates
+      const progressUpdates = [
+        'Connecting to Tavus API...',
+        'Processing quiz content...',
+        'Creating educational script...',
+        'Generating AI video...',
+        'Finalizing video production...'
+      ];
+
+      let progressIndex = 0;
+      const progressInterval = setInterval(() => {
+        if (progressIndex < progressUpdates.length - 1) {
+          progressIndex++;
+          setVideoGenerationProgress(progressUpdates[progressIndex]);
+        }
+      }, 3000);
+
       const videoUrl = await generateVideoWithTavus(
         generatedQuiz.title,
         generatedQuiz.description
       );
+      
+      clearInterval(progressInterval);
       setGeneratedVideoUrl(videoUrl);
+      setVideoGenerationProgress('Video generation completed!');
       
       if (onNavigate) {
         onNavigate('video-player', {
@@ -167,9 +190,10 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
         });
       }
       
-      toast.success('AI video generated successfully!');
+      toast.success('🎬 AI video generated successfully!');
     } catch (error) {
       console.error('Video generation error:', error);
+      setVideoGenerationProgress('');
       toast.error('Failed to generate video. Please try again.');
     } finally {
       setIsGeneratingVideo(false);
@@ -213,6 +237,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
   const resetGenerator = () => {
     setCurrentStep('upload');
     setGeneratedVideoUrl(null);
+    setVideoGenerationProgress('');
     resetQuizGeneratorHook();
   };
 
@@ -308,8 +333,19 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             
             <div className="mb-6 flex-grow">
               <p className="text-gray-700 text-sm leading-relaxed">
-                Topic overview video
+                {generatedVideoUrl ? 'Video ready to watch' : 'Topic overview video'}
               </p>
+              {isGeneratingVideo && videoGenerationProgress && (
+                <div className="mt-4">
+                  <div className="flex items-center space-x-2 text-sm text-orange-600">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{videoGenerationProgress}</span>
+                  </div>
+                  <div className="w-full bg-orange-200 rounded-full h-2 mt-2">
+                    <div className="bg-orange-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-auto">
@@ -323,10 +359,15 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Generating...</span>
                   </>
+                ) : generatedVideoUrl ? (
+                  <>
+                    <Video className="w-5 h-5" />
+                    <span>Watch Video</span>
+                  </>
                 ) : (
                   <>
                     <Video className="w-5 h-5" />
-                    <span>Generate</span>
+                    <span>Generate Video</span>
                   </>
                 )}
               </button>

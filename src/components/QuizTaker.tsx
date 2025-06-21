@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, Clock, CheckCircle, XCircle, AlertCircle, Trophy, RotateCcw } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface Question {
   id: string;
@@ -28,11 +29,25 @@ interface QuizTakerProps {
 }
 
 const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
+  // Defensive check for quiz data
+  useEffect(() => {
+    if (!quiz || !quiz.questions || !Array.isArray(quiz.questions) || quiz.questions.length === 0) {
+      toast.error('Invalid quiz data. Returning to quiz overview.');
+      onBack();
+      return;
+    }
+  }, [quiz, onBack]);
+
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [showResults, setShowResults] = useState(false);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
+
+  // Early return if quiz data is invalid
+  if (!quiz || !quiz.questions || !Array.isArray(quiz.questions) || quiz.questions.length === 0) {
+    return null;
+  }
 
   const currentQuestion = quiz.questions[currentQuestionIndex];
   const totalQuestions = quiz.questions.length;

@@ -7,41 +7,35 @@ import {
   Mic, 
   MicOff, 
   Video, 
-  VideoOff,
-  Monitor,
-  MonitorOff,
-  Phone,
+  VideoOff, 
+  Phone, 
+  Monitor, 
   Plus,
-  Search,
-  Filter,
-  Clock,
-  BookOpen,
-  FileText,
-  Upload,
   Send,
   Smile,
   Paperclip,
   MoreVertical,
-  X,
-  Edit3,
-  Square,
-  Circle,
-  Triangle,
-  Minus,
-  Type,
-  Eraser,
+  Crown,
+  UserCheck,
+  Clock,
+  Play,
+  Pause,
   RotateCcw,
   Download,
   Palette,
-  Timer,
-  Play,
-  Pause,
-  SkipForward,
-  Volume2,
-  VolumeX,
+  Eraser,
+  Circle,
+  Square,
+  Minus,
+  X,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
+  FileText,
   Brain,
-  Target,
-  Award
+  ExternalLink,
+  Eye,
+  ArrowRight
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -89,165 +83,101 @@ interface SharedContent {
   id: string;
   content_type: string;
   content_id: string;
-  user_id: string;
   shared_at: string;
+  user_id: string;
   user_name?: string;
   title?: string;
-}
-
-interface WhiteboardStroke {
-  id: string;
-  points: number[];
-  color: string;
-  width: number;
-  tool: string;
-}
-
-interface PomodoroSession {
-  workTime: number;
-  breakTime: number;
-  currentTime: number;
-  isRunning: boolean;
-  isWorkSession: boolean;
-  completedSessions: number;
+  description?: string;
 }
 
 const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [currentView, setCurrentView] = useState<'browse' | 'room'>('browse');
-  const [studyRooms, setStudyRooms] = useState<StudyRoom[]>([]);
+  const [rooms, setRooms] = useState<StudyRoom[]>([]);
   const [currentRoom, setCurrentRoom] = useState<StudyRoom | null>(null);
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [sharedContent, setSharedContent] = useState<SharedContent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [newMessage, setNewMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [showJoinRoom, setShowJoinRoom] = useState(false);
   const [showShareQuiz, setShowShareQuiz] = useState(false);
-  const [showAddResource, setShowAddResource] = useState(false);
-  const [newMessage, setNewMessage] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterSubject, setFilterSubject] = useState('all');
-  const [filterDifficulty, setFilterDifficulty] = useState('all');
-  
-  // Media states
-  const [isMicOn, setIsMicOn] = useState(false);
-  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [showShareResource, setShowShareResource] = useState(false);
+  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  
-  // Enhanced whiteboard states
+  const [showWhiteboard, setShowWhiteboard] = useState(false);
+  const [isPomodoroActive, setIsPomodoroActive] = useState(false);
+  const [pomodoroTime, setPomodoroTime] = useState(25 * 60); // 25 minutes in seconds
+  const [pomodoroMode, setPomodoroMode] = useState<'work' | 'break'>('work');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line' | 'rectangle' | 'circle' | 'text'>('pen');
+  const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line' | 'rectangle' | 'circle'>('pen');
   const [currentColor, setCurrentColor] = useState('#000000');
-  const [currentWidth, setCurrentWidth] = useState(2);
-  const [strokes, setStrokes] = useState<WhiteboardStroke[]>([]);
-  const [startPoint, setStartPoint] = useState<{x: number, y: number} | null>(null);
-  const [tempCanvas, setTempCanvas] = useState<HTMLCanvasElement | null>(null);
-  
-  // Pomodoro states
-  const [pomodoroSession, setPomodoroSession] = useState<PomodoroSession>({
-    workTime: 25 * 60, // 25 minutes in seconds
-    breakTime: 5 * 60, // 5 minutes in seconds
-    currentTime: 25 * 60,
-    isRunning: false,
-    isWorkSession: true,
-    completedSessions: 0
-  });
-  const pomodoroIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [brushSize, setBrushSize] = useState(3);
+  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
 
-  // Form states
-  const [roomForm, setRoomForm] = useState({
+  // New room form state
+  const [newRoom, setNewRoom] = useState({
     name: '',
     description: '',
     subject: '',
     difficulty: 'beginner',
-    maxParticipants: 10,
-    isPublic: true
+    max_participants: 10,
+    is_public: true
   });
-  const [joinCode, setJoinCode] = useState('');
+
+  const [joinRoomCode, setJoinRoomCode] = useState('');
 
   useEffect(() => {
-    if (user) {
-      loadStudyRooms();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (currentRoom && user) {
-      loadRoomData();
-      const interval = setInterval(loadRoomData, 5000); // Refresh every 5 seconds
-      return () => clearInterval(interval);
-    }
-  }, [currentRoom, user]);
-
-  // Initialize canvas when component mounts
-  useEffect(() => {
-    if (canvasRef.current) {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        // Set canvas size
-        canvas.width = 800;
-        canvas.height = 600;
-        
-        // Set default drawing properties
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Create temporary canvas for shape preview
-        const tempCanv = document.createElement('canvas');
-        tempCanv.width = canvas.width;
-        tempCanv.height = canvas.height;
-        setTempCanvas(tempCanv);
-      }
+    if (currentView === 'browse') {
+      fetchRooms();
     }
   }, [currentView]);
 
-  // Pomodoro timer effect
   useEffect(() => {
-    if (pomodoroSession.isRunning) {
-      pomodoroIntervalRef.current = setInterval(() => {
-        setPomodoroSession(prev => {
-          if (prev.currentTime <= 1) {
-            // Session completed
-            const isWorkSession = prev.isWorkSession;
-            const completedSessions = isWorkSession ? prev.completedSessions + 1 : prev.completedSessions;
-            
-            toast.success(isWorkSession ? '🎉 Work session completed! Time for a break.' : '✨ Break time over! Ready for another session?');
-            
-            return {
-              ...prev,
-              currentTime: isWorkSession ? prev.breakTime : prev.workTime,
-              isWorkSession: !isWorkSession,
-              completedSessions,
-              isRunning: false
-            };
-          }
-          return {
-            ...prev,
-            currentTime: prev.currentTime - 1
-          };
-        });
+    if (currentRoom) {
+      fetchRoomData();
+      const interval = setInterval(fetchRoomData, 5000); // Refresh every 5 seconds
+      return () => clearInterval(interval);
+    }
+  }, [currentRoom]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isPomodoroActive && pomodoroTime > 0) {
+      interval = setInterval(() => {
+        setPomodoroTime(prev => prev - 1);
       }, 1000);
-    } else {
-      if (pomodoroIntervalRef.current) {
-        clearInterval(pomodoroIntervalRef.current);
+    } else if (pomodoroTime === 0) {
+      // Timer finished
+      setIsPomodoroActive(false);
+      if (pomodoroMode === 'work') {
+        toast.success('Work session completed! Time for a break.');
+        setPomodoroMode('break');
+        setPomodoroTime(5 * 60); // 5 minute break
+      } else {
+        toast.success('Break time over! Ready for another work session?');
+        setPomodoroMode('work');
+        setPomodoroTime(25 * 60); // 25 minute work session
       }
     }
+    return () => clearInterval(interval);
+  }, [isPomodoroActive, pomodoroTime, pomodoroMode]);
 
-    return () => {
-      if (pomodoroIntervalRef.current) {
-        clearInterval(pomodoroIntervalRef.current);
-      }
-    };
-  }, [pomodoroSession.isRunning]);
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-  const loadStudyRooms = async () => {
+  const fetchRooms = async () => {
     try {
-      setLoading(true);
+      setIsLoading(true);
       const { data, error } = await supabase
         .from('study_rooms')
         .select(`
@@ -259,6 +189,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
       if (error) throw error;
 
+      // Get participant counts for each room
       const roomsWithCounts = await Promise.all(
         (data || []).map(async (room) => {
           const { count } = await supabase
@@ -275,20 +206,20 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         })
       );
 
-      setStudyRooms(roomsWithCounts);
-    } catch (error: any) {
-      console.error('Error loading study rooms:', error);
+      setRooms(roomsWithCounts);
+    } catch (error) {
+      console.error('Error fetching rooms:', error);
       toast.error('Failed to load study rooms');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const loadRoomData = async () => {
-    if (!currentRoom || !user) return;
+  const fetchRoomData = async () => {
+    if (!currentRoom) return;
 
     try {
-      // Load participants
+      // Fetch participants
       const { data: participantsData, error: participantsError } = await supabase
         .from('room_participants')
         .select(`
@@ -305,7 +236,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         user_name: p.profiles?.full_name || 'Unknown'
       })));
 
-      // Load messages
+      // Fetch messages
       const { data: messagesData, error: messagesError } = await supabase
         .from('room_messages')
         .select(`
@@ -323,7 +254,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         user_name: m.profiles?.full_name || 'Unknown'
       })));
 
-      // Load shared content
+      // Fetch shared content
       const { data: contentData, error: contentError } = await supabase
         .from('room_shared_content')
         .select(`
@@ -335,19 +266,42 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
       if (contentError) throw contentError;
 
-      setSharedContent((contentData || []).map(c => ({
-        ...c,
-        user_name: c.profiles?.full_name || 'Unknown',
-        title: c.content_type === 'quiz' ? 'Shared Quiz' : 'Study Material'
-      })));
+      // Enhance shared content with titles and descriptions
+      const enhancedContent = (contentData || []).map(content => {
+        let title = 'Shared Content';
+        let description = '';
 
-    } catch (error: any) {
-      console.error('Error loading room data:', error);
+        if (content.content_type === 'quiz') {
+          title = 'Quiz: Biology Fundamentals';
+          description = 'Interactive quiz with 10 questions';
+        } else if (content.content_type === 'study_material') {
+          title = 'Study Material: Cell Structure';
+          description = 'Comprehensive notes on cellular biology';
+        } else if (content.content_type === 'flashcard_set') {
+          title = 'Flashcards: Key Terms';
+          description = '25 flashcards covering important concepts';
+        }
+
+        return {
+          ...content,
+          user_name: content.profiles?.full_name || 'Unknown',
+          title,
+          description
+        };
+      });
+
+      setSharedContent(enhancedContent);
+
+    } catch (error) {
+      console.error('Error fetching room data:', error);
     }
   };
 
   const createRoom = async () => {
-    if (!user) return;
+    if (!user || !newRoom.name.trim() || !newRoom.subject.trim()) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
 
     try {
       const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -355,15 +309,14 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       const { data, error } = await supabase
         .from('study_rooms')
         .insert({
-          name: roomForm.name,
-          description: roomForm.description,
-          subject: roomForm.subject,
-          difficulty: roomForm.difficulty,
-          max_participants: roomForm.maxParticipants,
-          is_public: roomForm.isPublic,
+          name: newRoom.name,
+          description: newRoom.description,
+          subject: newRoom.subject,
+          difficulty: newRoom.difficulty,
+          max_participants: newRoom.max_participants,
+          is_public: newRoom.is_public,
           created_by: user.id,
-          room_code: roomCode,
-          session_type: 'study' // Default session type
+          room_code: roomCode
         })
         .select()
         .single();
@@ -371,109 +324,89 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       if (error) throw error;
 
       // Join the room as host
-      await joinRoom(data.id, 'host');
+      await joinRoom(data, 'host');
       
-      toast.success('Room created successfully!');
       setShowCreateRoom(false);
-      setRoomForm({
+      setNewRoom({
         name: '',
         description: '',
         subject: '',
         difficulty: 'beginner',
-        maxParticipants: 10,
-        isPublic: true
+        max_participants: 10,
+        is_public: true
       });
-      loadStudyRooms();
-    } catch (error: any) {
+      
+      toast.success('Study room created successfully!');
+    } catch (error) {
       console.error('Error creating room:', error);
       toast.error('Failed to create room');
     }
   };
 
-  const joinRoom = async (roomId: string, role: string = 'participant') => {
-    if (!user) return;
-
-    try {
-      // Check if user is already a participant
-      const { data: existingParticipant } = await supabase
-        .from('room_participants')
-        .select('id, is_active')
-        .eq('room_id', roomId)
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (existingParticipant) {
-        if (!existingParticipant.is_active) {
-          // Reactivate participant
-          const { error } = await supabase
-            .from('room_participants')
-            .update({ is_active: true, joined_at: new Date().toISOString() })
-            .eq('id', existingParticipant.id);
-
-          if (error) throw error;
-        }
-      } else {
-        // Add new participant
-        const { error } = await supabase
-          .from('room_participants')
-          .insert({
-            room_id: roomId,
-            user_id: user.id,
-            role: role,
-            is_active: true
-          });
-
-        if (error) throw error;
-      }
-
-      // Get room details and enter
-      const { data: roomData, error: roomError } = await supabase
-        .from('study_rooms')
-        .select('*')
-        .eq('id', roomId)
-        .single();
-
-      if (roomError) throw roomError;
-
-      setCurrentRoom(roomData);
-      setCurrentView('room');
-      toast.success('Joined room successfully!');
-    } catch (error: any) {
-      console.error('Error joining room:', error);
-      toast.error('Failed to join room');
-    }
-  };
-
   const joinRoomByCode = async () => {
-    if (!joinCode.trim()) {
+    if (!joinRoomCode.trim()) {
       toast.error('Please enter a room code');
       return;
     }
 
     try {
-      const { data: roomData, error } = await supabase
+      const { data, error } = await supabase
         .from('study_rooms')
         .select('*')
-        .eq('room_code', joinCode.toUpperCase())
+        .eq('room_code', joinRoomCode.toUpperCase())
         .eq('status', 'active')
         .single();
 
-      if (error || !roomData) {
-        toast.error('Room not found or inactive');
-        return;
+      if (error) throw error;
+
+      await joinRoom(data);
+      setShowJoinRoom(false);
+      setJoinRoomCode('');
+    } catch (error) {
+      console.error('Error joining room:', error);
+      toast.error('Room not found or inactive');
+    }
+  };
+
+  const joinRoom = async (room: StudyRoom, role: string = 'participant') => {
+    if (!user) return;
+
+    try {
+      // Check if already in room
+      const { data: existingParticipant } = await supabase
+        .from('room_participants')
+        .select('id')
+        .eq('room_id', room.id)
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .single();
+
+      if (!existingParticipant) {
+        // Join the room
+        const { error } = await supabase
+          .from('room_participants')
+          .insert({
+            room_id: room.id,
+            user_id: user.id,
+            role: role
+          });
+
+        if (error && error.code !== '23505') { // Ignore duplicate key error
+          throw error;
+        }
       }
 
-      await joinRoom(roomData.id);
-      setShowJoinRoom(false);
-      setJoinCode('');
-    } catch (error: any) {
-      console.error('Error joining room by code:', error);
+      setCurrentRoom(room);
+      setCurrentView('room');
+      toast.success(`Joined ${room.name}`);
+    } catch (error) {
+      console.error('Error joining room:', error);
       toast.error('Failed to join room');
     }
   };
 
   const leaveRoom = async () => {
-    if (!currentRoom || !user) return;
+    if (!user || !currentRoom) return;
 
     try {
       const { error } = await supabase
@@ -489,31 +422,17 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       setParticipants([]);
       setMessages([]);
       setSharedContent([]);
-      toast.success('Left room successfully');
-    } catch (error: any) {
+      toast.success('Left the room');
+    } catch (error) {
       console.error('Error leaving room:', error);
       toast.error('Failed to leave room');
     }
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !currentRoom || !user) return;
+    if (!user || !currentRoom || !newMessage.trim()) return;
 
     try {
-      // Verify user is an active participant
-      const { data: participant } = await supabase
-        .from('room_participants')
-        .select('id')
-        .eq('room_id', currentRoom.id)
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (!participant) {
-        toast.error('You must be an active participant to send messages');
-        return;
-      }
-
       const { error } = await supabase
         .from('room_messages')
         .insert({
@@ -526,246 +445,92 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       if (error) throw error;
 
       setNewMessage('');
-      loadRoomData(); // Refresh messages
-    } catch (error: any) {
+      fetchRoomData(); // Refresh messages
+    } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
     }
   };
 
-  const shareQuiz = async (quizData: any) => {
-    if (!currentRoom || !user) return;
+  const shareQuiz = async (quizId: string, title: string) => {
+    if (!user || !currentRoom) return;
 
     try {
-      // Generate a proper UUID for the demo quiz
-      const demoQuizId = crypto.randomUUID();
-      
       const { error } = await supabase
         .from('room_shared_content')
         .insert({
           room_id: currentRoom.id,
           user_id: user.id,
           content_type: 'quiz',
-          content_id: quizData.id || demoQuizId
+          content_id: quizId
         });
 
       if (error) throw error;
 
-      // Send a message about the shared quiz
-      await supabase
-        .from('room_messages')
-        .insert({
-          room_id: currentRoom.id,
-          user_id: user.id,
-          message: `📝 Shared a quiz: ${quizData.title || 'Demo Quiz'}`,
-          message_type: 'quiz_share'
-        });
-
-      toast.success('Quiz shared successfully!');
+      toast.success(`Quiz "${title}" shared with the room!`);
       setShowShareQuiz(false);
-      loadRoomData();
-    } catch (error: any) {
+      fetchRoomData(); // Refresh shared content
+    } catch (error) {
       console.error('Error sharing quiz:', error);
       toast.error('Failed to share quiz');
     }
   };
 
-  const addResource = async (resourceData: any) => {
-    if (!currentRoom || !user) return;
+  const shareResource = async (resourceId: string, title: string) => {
+    if (!user || !currentRoom) return;
 
     try {
-      // Generate a proper UUID for the demo resource
-      const demoResourceId = crypto.randomUUID();
-      
       const { error } = await supabase
         .from('room_shared_content')
         .insert({
           room_id: currentRoom.id,
           user_id: user.id,
           content_type: 'study_material',
-          content_id: resourceData.id || demoResourceId
+          content_id: resourceId
         });
 
       if (error) throw error;
 
-      // Send a message about the shared resource
-      await supabase
-        .from('room_messages')
-        .insert({
-          room_id: currentRoom.id,
-          user_id: user.id,
-          message: `📚 Shared a resource: ${resourceData.title || 'Study Material'}`,
-          message_type: 'file'
-        });
-
-      toast.success('Resource shared successfully!');
-      setShowAddResource(false);
-      loadRoomData();
-    } catch (error: any) {
+      toast.success(`Resource "${title}" shared with the room!`);
+      setShowShareResource(false);
+      fetchRoomData(); // Refresh shared content
+    } catch (error) {
       console.error('Error sharing resource:', error);
       toast.error('Failed to share resource');
     }
   };
 
-  // Enhanced whiteboard functions
-  const getMousePos = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current) return { x: 0, y: 0 };
-    
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY
-    };
-  };
-
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current) return;
-    
-    const pos = getMousePos(e);
-    setIsDrawing(true);
-    setStartPoint(pos);
-    
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.strokeStyle = currentTool === 'eraser' ? '#FFFFFF' : currentColor;
-    ctx.lineWidth = currentTool === 'eraser' ? currentWidth * 3 : currentWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    if (currentTool === 'pen' || currentTool === 'eraser') {
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
+  const accessSharedContent = (content: SharedContent) => {
+    if (content.content_type === 'quiz') {
+      // Navigate to quiz generator with the shared quiz
+      toast.success(`Opening quiz: ${content.title}`);
+      onNavigate('quiz-generator');
+    } else if (content.content_type === 'study_material') {
+      // Navigate to materials section (when built)
+      toast.success(`Opening study material: ${content.title}`);
+      onNavigate('materials');
+    } else if (content.content_type === 'flashcard_set') {
+      // Navigate to flashcards
+      toast.success(`Opening flashcard set: ${content.title}`);
+      onNavigate('quiz-generator');
+    } else {
+      toast.info('Content type not yet supported');
     }
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !canvasRef.current || !startPoint) return;
-    
-    const pos = getMousePos(e);
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    if (currentTool === 'pen' || currentTool === 'eraser') {
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
-    } else if (tempCanvas) {
-      // For shapes, draw on temporary canvas first
-      const tempCtx = tempCanvas.getContext('2d');
-      if (!tempCtx) return;
-
-      // Clear temp canvas
-      tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-      
-      // Copy main canvas to temp canvas
-      tempCtx.drawImage(canvas, 0, 0);
-      
-      // Draw shape on temp canvas
-      tempCtx.strokeStyle = currentColor;
-      tempCtx.lineWidth = currentWidth;
-      tempCtx.lineCap = 'round';
-      tempCtx.lineJoin = 'round';
-
-      const width = pos.x - startPoint.x;
-      const height = pos.y - startPoint.y;
-
-      tempCtx.beginPath();
-      
-      switch (currentTool) {
-        case 'line':
-          tempCtx.moveTo(startPoint.x, startPoint.y);
-          tempCtx.lineTo(pos.x, pos.y);
-          break;
-        case 'rectangle':
-          tempCtx.rect(startPoint.x, startPoint.y, width, height);
-          break;
-        case 'circle':
-          const radius = Math.sqrt(width * width + height * height);
-          tempCtx.arc(startPoint.x, startPoint.y, radius, 0, 2 * Math.PI);
-          break;
-      }
-      
-      tempCtx.stroke();
-      
-      // Clear main canvas and draw temp canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(tempCanvas, 0, 0);
+  const togglePomodoro = () => {
+    setIsPomodoroActive(!isPomodoroActive);
+    if (!isPomodoroActive) {
+      toast.success(`${pomodoroMode === 'work' ? 'Work' : 'Break'} session started!`);
+    } else {
+      toast.success('Pomodoro timer paused');
     }
-  };
-
-  const stopDrawing = () => {
-    if (!isDrawing) return;
-    
-    setIsDrawing(false);
-    setStartPoint(null);
-    
-    // Save the current state for undo functionality
-    if (canvasRef.current) {
-      const canvas = canvasRef.current;
-      const imageData = canvas.toDataURL();
-      // You could save this to strokes state for undo functionality
-    }
-  };
-
-  const clearWhiteboard = () => {
-    if (!canvasRef.current) return;
-    
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-    setStrokes([]);
-    toast.success('Whiteboard cleared');
-  };
-
-  const downloadWhiteboard = () => {
-    if (!canvasRef.current) return;
-    
-    const canvas = canvasRef.current;
-    const link = document.createElement('a');
-    link.download = `whiteboard-${Date.now()}.png`;
-    link.href = canvas.toDataURL();
-    link.click();
-    toast.success('Whiteboard downloaded');
-  };
-
-  // Pomodoro functions
-  const startPomodoro = () => {
-    setPomodoroSession(prev => ({ ...prev, isRunning: true }));
-    toast.success(`${pomodoroSession.isWorkSession ? 'Work' : 'Break'} session started!`);
-  };
-
-  const pausePomodoro = () => {
-    setPomodoroSession(prev => ({ ...prev, isRunning: false }));
-    toast('Pomodoro paused');
   };
 
   const resetPomodoro = () => {
-    setPomodoroSession(prev => ({
-      ...prev,
-      currentTime: prev.isWorkSession ? prev.workTime : prev.breakTime,
-      isRunning: false
-    }));
-    toast('Pomodoro reset');
-  };
-
-  const skipPomodoroSession = () => {
-    setPomodoroSession(prev => ({
-      ...prev,
-      currentTime: prev.isWorkSession ? prev.breakTime : prev.workTime,
-      isWorkSession: !prev.isWorkSession,
-      isRunning: false,
-      completedSessions: prev.isWorkSession ? prev.completedSessions + 1 : prev.completedSessions
-    }));
-    toast('Session skipped');
+    setIsPomodoroActive(false);
+    setPomodoroTime(pomodoroMode === 'work' ? 25 * 60 : 5 * 60);
+    toast.success('Pomodoro timer reset');
   };
 
   const formatTime = (seconds: number) => {
@@ -774,75 +539,428 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Media controls
-  const toggleMic = () => {
-    setIsMicOn(!isMicOn);
-    toast(isMicOn ? 'Microphone muted' : 'Microphone unmuted');
+  // Whiteboard functions
+  const initializeCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Set canvas size
+    canvas.width = 800;
+    canvas.height = 600;
+
+    // Set white background
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Set default drawing properties
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
   };
 
-  const toggleCamera = () => {
-    setIsCameraOn(!isCameraOn);
-    toast(isCameraOn ? 'Camera turned off' : 'Camera turned on');
+  useEffect(() => {
+    if (showWhiteboard) {
+      initializeCanvas();
+    }
+  }, [showWhiteboard]);
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setIsDrawing(true);
+    setStartPos({ x, y });
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    if (currentTool === 'pen' || currentTool === 'eraser') {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    }
   };
 
-  const toggleScreenShare = () => {
-    setIsScreenSharing(!isScreenSharing);
-    toast(isScreenSharing ? 'Screen sharing stopped' : 'Screen sharing started');
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    if (currentTool === 'pen') {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = currentColor;
+      ctx.lineWidth = brushSize;
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    } else if (currentTool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = brushSize * 2;
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
   };
 
-  const filteredRooms = studyRooms.filter(room => {
-    const matchesSearch = room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         room.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSubject = filterSubject === 'all' || room.subject === filterSubject;
-    const matchesDifficulty = filterDifficulty === 'all' || room.difficulty === filterDifficulty;
-    
-    return matchesSearch && matchesSubject && matchesDifficulty;
-  });
+  const stopDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
 
-  if (currentView === 'room' && currentRoom) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    if (currentTool === 'line' || currentTool === 'rectangle' || currentTool === 'circle') {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = currentColor;
+      ctx.lineWidth = brushSize;
+      ctx.beginPath();
+
+      if (currentTool === 'line') {
+        ctx.moveTo(startPos.x, startPos.y);
+        ctx.lineTo(x, y);
+      } else if (currentTool === 'rectangle') {
+        ctx.rect(startPos.x, startPos.y, x - startPos.x, y - startPos.y);
+      } else if (currentTool === 'circle') {
+        const radius = Math.sqrt(Math.pow(x - startPos.x, 2) + Math.pow(y - startPos.y, 2));
+        ctx.arc(startPos.x, startPos.y, radius, 0, 2 * Math.PI);
+      }
+
+      ctx.stroke();
+    }
+
+    setIsDrawing(false);
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const downloadCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const link = document.createElement('a');
+    link.download = 'whiteboard.png';
+    link.href = canvas.toDataURL();
+    link.click();
+  };
+
+  if (currentView === 'browse') {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200 px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Study Rooms</h1>
+              <p className="text-gray-600">Join collaborative study sessions with other learners</p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setShowJoinRoom(true)}
+                className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                <Users className="w-4 h-4" />
+                <span>Join Room</span>
+              </button>
+              <button
+                onClick={() => setShowCreateRoom(true)}
+                className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Room</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Rooms Grid */}
+        <div className="max-w-7xl mx-auto px-8 py-8">
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading study rooms...</p>
+            </div>
+          ) : rooms.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No Active Study Rooms</h3>
+              <p className="text-gray-600 mb-6">Be the first to create a study room and start collaborating!</p>
+              <button
+                onClick={() => setShowCreateRoom(true)}
+                className="px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+              >
+                Create First Room
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {rooms.map((room) => (
+                <div key={room.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-gray-900 mb-1">{room.name}</h3>
+                      <p className="text-sm text-gray-600 mb-2">{room.description}</p>
+                      <div className="flex items-center space-x-4 text-xs text-gray-500">
+                        <span className="bg-blue-100 text-blue-600 px-2 py-1 rounded">{room.subject}</span>
+                        <span className="bg-green-100 text-green-600 px-2 py-1 rounded">{room.difficulty}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4 text-sm text-gray-500">
+                      <div className="flex items-center space-x-1">
+                        <Users className="w-4 h-4" />
+                        <span>{room.participant_count}/{room.max_participants}</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Crown className="w-4 h-4" />
+                        <span>{room.creator_name}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => joinRoom(room)}
+                      className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm"
+                    >
+                      Join
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Create Room Modal */}
+        {showCreateRoom && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-md">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Create Study Room</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Room Name</label>
+                  <input
+                    type="text"
+                    value={newRoom.name}
+                    onChange={(e) => setNewRoom(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter room name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <textarea
+                    value={newRoom.description}
+                    onChange={(e) => setNewRoom(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Describe what you'll be studying"
+                    rows={3}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
+                  <input
+                    type="text"
+                    value={newRoom.subject}
+                    onChange={(e) => setNewRoom(prev => ({ ...prev, subject: e.target.value }))}
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="e.g., Mathematics, Biology, History"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty Level</label>
+                  <select
+                    value={newRoom.difficulty}
+                    onChange={(e) => setNewRoom(prev => ({ ...prev, difficulty: e.target.value }))}
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Max Participants</label>
+                  <input
+                    type="number"
+                    min="2"
+                    max="100"
+                    value={newRoom.max_participants}
+                    onChange={(e) => setNewRoom(prev => ({ ...prev, max_participants: parseInt(e.target.value) }))}
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="is_public"
+                    checked={newRoom.is_public}
+                    onChange={(e) => setNewRoom(prev => ({ ...prev, is_public: e.target.checked }))}
+                    className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                  />
+                  <label htmlFor="is_public" className="ml-3 text-sm text-gray-700">
+                    Make room public (visible to all users)
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex space-x-4 mt-8">
+                <button
+                  onClick={() => setShowCreateRoom(false)}
+                  className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={createRoom}
+                  className="flex-1 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+                >
+                  Create Room
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Join Room Modal */}
+        {showJoinRoom && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-md">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Join Study Room</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Room Code</label>
+                  <input
+                    type="text"
+                    value={joinRoomCode}
+                    onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg font-mono"
+                    placeholder="Enter 6-digit room code"
+                    maxLength={6}
+                  />
+                </div>
+              </div>
+
+              <div className="flex space-x-4 mt-8">
+                <button
+                  onClick={() => setShowJoinRoom(false)}
+                  className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={joinRoomByCode}
+                  className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                  Join Room
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Room View
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
         {/* Room Header */}
         <div className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => setCurrentView('browse')}
-                className="text-gray-600 hover:text-gray-900"
+                className="text-gray-600 hover:text-gray-900 transition-colors"
               >
                 ← Back to Rooms
               </button>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">{currentRoom.name}</h1>
-                <p className="text-sm text-gray-600">
-                  {participants.length} participants • Code: {currentRoom.room_code}
-                </p>
+                <h1 className="text-xl font-bold text-gray-900">{currentRoom?.name}</h1>
+                <p className="text-sm text-gray-600">Room Code: {currentRoom?.room_code}</p>
               </div>
             </div>
             
             {/* Media Controls */}
             <div className="flex items-center space-x-2">
               <button
-                onClick={toggleMic}
-                className={`p-2 rounded-lg ${isMicOn ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}
+                onClick={() => setIsAudioEnabled(!isAudioEnabled)}
+                className={`p-2 rounded-lg transition-colors ${
+                  isAudioEnabled ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                }`}
+                title={isAudioEnabled ? 'Mute' : 'Unmute'}
               >
-                {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+                {isAudioEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
               </button>
+              
               <button
-                onClick={toggleCamera}
-                className={`p-2 rounded-lg ${isCameraOn ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}
+                onClick={() => setIsVideoEnabled(!isVideoEnabled)}
+                className={`p-2 rounded-lg transition-colors ${
+                  isVideoEnabled ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                }`}
+                title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
               >
-                {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+                {isVideoEnabled ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
               </button>
+              
               <button
-                onClick={toggleScreenShare}
-                className={`p-2 rounded-lg ${isScreenSharing ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}
+                onClick={() => setIsScreenSharing(!isScreenSharing)}
+                className={`p-2 rounded-lg transition-colors ${
+                  isScreenSharing ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
+                }`}
+                title={isScreenSharing ? 'Stop sharing' : 'Share screen'}
               >
-                {isScreenSharing ? <Monitor className="w-5 h-5" /> : <MonitorOff className="w-5 h-5" />}
+                <Monitor className="w-5 h-5" />
               </button>
+              
+              <button
+                onClick={() => setShowWhiteboard(!showWhiteboard)}
+                className={`p-2 rounded-lg transition-colors ${
+                  showWhiteboard ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-600'
+                }`}
+                title="Toggle whiteboard"
+              >
+                <Palette className="w-5 h-5" />
+              </button>
+              
               <button
                 onClick={leaveRoom}
-                className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200"
+                className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                title="Leave room"
               >
                 <Phone className="w-5 h-5" />
               </button>
@@ -852,143 +970,126 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
         {/* Room Content */}
         <div className="flex-1 flex">
-          {/* Main Content Area */}
-          <div className="flex-1 flex flex-col">
-            {/* Whiteboard */}
-            <div className="flex-1 bg-white m-4 rounded-lg border border-gray-200 overflow-hidden">
-              <div className="border-b border-gray-200 p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium text-gray-900">Collaborative Whiteboard</h3>
-                  <div className="flex items-center space-x-4">
-                    {/* Drawing Tools */}
-                    <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
-                      <button
-                        onClick={() => setCurrentTool('pen')}
-                        className={`p-2 rounded transition-colors ${
-                          currentTool === 'pen' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                        title="Pen"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setCurrentTool('eraser')}
-                        className={`p-2 rounded transition-colors ${
-                          currentTool === 'eraser' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                        title="Eraser"
-                      >
-                        <Eraser className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setCurrentTool('line')}
-                        className={`p-2 rounded transition-colors ${
-                          currentTool === 'line' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                        title="Line"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setCurrentTool('rectangle')}
-                        className={`p-2 rounded transition-colors ${
-                          currentTool === 'rectangle' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                        title="Rectangle"
-                      >
-                        <Square className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setCurrentTool('circle')}
-                        className={`p-2 rounded transition-colors ${
-                          currentTool === 'circle' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                        title="Circle"
-                      >
-                        <Circle className="w-4 h-4" />
-                      </button>
-                    </div>
-                    
-                    {/* Color and Size Controls */}
-                    <div className="flex items-center space-x-2">
-                      <div className="flex items-center space-x-2">
-                        <label className="text-sm text-gray-600">Color:</label>
-                        <input
-                          type="color"
-                          value={currentColor}
-                          onChange={(e) => setCurrentColor(e.target.value)}
-                          className="w-8 h-8 rounded border border-gray-300 cursor-pointer"
-                          disabled={currentTool === 'eraser'}
-                        />
-                      </div>
-                      
-                      <div className="flex items-center space-x-2">
-                        <label className="text-sm text-gray-600">Size:</label>
-                        <input
-                          type="range"
-                          min="1"
-                          max="20"
-                          value={currentWidth}
-                          onChange={(e) => setCurrentWidth(parseInt(e.target.value))}
-                          className="w-20"
-                        />
-                        <span className="text-sm text-gray-600 w-6">{currentWidth}</span>
-                      </div>
-                    </div>
-                    
-                    {/* Action Buttons */}
-                    <div className="flex items-center space-x-1">
-                      <button
-                        onClick={clearWhiteboard}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Clear Whiteboard"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={downloadWhiteboard}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Download Whiteboard"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                    </div>
+          {/* Video/Whiteboard Area */}
+          <div className="flex-1 p-6">
+            {showWhiteboard ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-6 h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">Collaborative Whiteboard</h3>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={clearCanvas}
+                      className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors text-sm"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={downloadCanvas}
+                      className="px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors text-sm"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
+
+                {/* Drawing Tools */}
+                <div className="flex items-center space-x-4 mb-4 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium text-gray-700">Tools:</span>
+                    {[
+                      { tool: 'pen', icon: '✏️', label: 'Pen' },
+                      { tool: 'eraser', icon: '🧽', label: 'Eraser' },
+                      { tool: 'line', icon: '📏', label: 'Line' },
+                      { tool: 'rectangle', icon: '⬜', label: 'Rectangle' },
+                      { tool: 'circle', icon: '⭕', label: 'Circle' }
+                    ].map(({ tool, icon, label }) => (
+                      <button
+                        key={tool}
+                        onClick={() => setCurrentTool(tool as any)}
+                        className={`p-2 rounded-lg transition-colors ${
+                          currentTool === tool ? 'bg-purple-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'
+                        }`}
+                        title={label}
+                      >
+                        <span className="text-lg">{icon}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {currentTool !== 'eraser' && (
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium text-gray-700">Color:</span>
+                      <input
+                        type="color"
+                        value={currentColor}
+                        onChange={(e) => setCurrentColor(e.target.value)}
+                        className="w-8 h-8 rounded border border-gray-300"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium text-gray-700">Size:</span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="20"
+                      value={brushSize}
+                      onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                      className="w-20"
+                    />
+                    <div 
+                      className="rounded-full border border-gray-300"
+                      style={{ 
+                        width: `${Math.max(brushSize * 2, 8)}px`, 
+                        height: `${Math.max(brushSize * 2, 8)}px`,
+                        backgroundColor: currentTool === 'eraser' ? '#f3f4f6' : currentColor
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Canvas */}
+                <div className="border border-gray-300 rounded-lg overflow-hidden">
+                  <canvas
+                    ref={canvasRef}
+                    onMouseDown={startDrawing}
+                    onMouseMove={draw}
+                    onMouseUp={stopDrawing}
+                    onMouseLeave={stopDrawing}
+                    className="cursor-crosshair bg-white"
+                    style={{ maxWidth: '100%', height: 'auto' }}
+                  />
+                </div>
               </div>
-              
-              {/* Canvas */}
-              <div className="flex-1 relative bg-white">
-                <canvas
-                  ref={canvasRef}
-                  className="w-full h-full border-0 cursor-crosshair"
-                  style={{ 
-                    cursor: currentTool === 'eraser' ? 'grab' : 'crosshair',
-                    touchAction: 'none'
-                  }}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                />
+            ) : (
+              <div className="bg-gray-900 rounded-xl h-full flex items-center justify-center">
+                <div className="text-center text-white">
+                  <Video className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg">Video call area</p>
+                  <p className="text-sm opacity-75">Camera and screen sharing will appear here</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Right Sidebar */}
+          {/* Sidebar */}
           <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
             {/* Participants */}
-            <div className="border-b border-gray-200 p-4">
-              <h3 className="font-medium text-gray-900 mb-3">Participants ({participants.length})</h3>
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="font-bold text-gray-900 mb-3 flex items-center">
+                <Users className="w-4 h-4 mr-2" />
+                Participants ({participants.length})
+              </h3>
               <div className="space-y-2 max-h-32 overflow-y-auto">
-                {participants.map(participant => (
+                {participants.map((participant) => (
                   <div key={participant.id} className="flex items-center space-x-2">
-                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm">
+                    <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
                       {participant.user_name?.charAt(0) || 'U'}
                     </div>
                     <span className="text-sm text-gray-900">{participant.user_name}</span>
                     {participant.role === 'host' && (
-                      <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Host</span>
+                      <Crown className="w-4 h-4 text-yellow-500" />
                     )}
                   </div>
                 ))}
@@ -996,88 +1097,126 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             </div>
 
             {/* Pomodoro Timer */}
-            <div className="border-b border-gray-200 p-4">
-              <h3 className="font-medium text-gray-900 mb-3">Pomodoro Timer</h3>
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="font-bold text-gray-900 mb-3 flex items-center">
+                <Clock className="w-4 h-4 mr-2" />
+                Pomodoro Timer
+              </h3>
               <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900 mb-2">
-                  {formatTime(pomodoroSession.currentTime)}
+                <div className="text-2xl font-mono font-bold text-gray-900 mb-2">
+                  {formatTime(pomodoroTime)}
                 </div>
                 <div className="text-sm text-gray-600 mb-3">
-                  {pomodoroSession.isWorkSession ? 'Work Session' : 'Break Time'} • 
-                  Session {pomodoroSession.completedSessions + 1}
+                  {pomodoroMode === 'work' ? 'Work Session' : 'Break Time'}
                 </div>
                 <div className="flex items-center justify-center space-x-2">
                   <button
-                    onClick={pomodoroSession.isRunning ? pausePomodoro : startPomodoro}
-                    className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                    onClick={togglePomodoro}
+                    className={`p-2 rounded-lg transition-colors ${
+                      isPomodoroActive ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
+                    }`}
                   >
-                    {pomodoroSession.isRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    {isPomodoroActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                   </button>
                   <button
                     onClick={resetPomodoro}
-                    className="p-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                    className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
                   >
                     <RotateCcw className="w-4 h-4" />
                   </button>
-                  <button
-                    onClick={skipPomodoroSession}
-                    className="p-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
-                  >
-                    <SkipForward className="w-4 h-4" />
-                  </button>
                 </div>
-              </div>
-              <div className="mt-3 text-xs text-gray-500 text-center">
-                <p><strong>Pomodoro Technique:</strong> Work for 25 minutes, then take a 5-minute break. This helps maintain focus and productivity during study sessions.</p>
+                <p className="text-xs text-gray-500 mt-2">
+                  Pomodoro Technique: 25min work + 5min break cycles for enhanced focus and productivity
+                </p>
               </div>
             </div>
 
             {/* Shared Content */}
-            <div className="border-b border-gray-200 p-4">
+            <div className="p-4 border-b border-gray-200">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium text-gray-900">Shared Content</h3>
-                <div className="flex space-x-1">
+                <h3 className="font-bold text-gray-900 flex items-center">
+                  <Share2 className="w-4 h-4 mr-2" />
+                  Shared Content
+                </h3>
+                <div className="flex items-center space-x-1">
                   <button
                     onClick={() => setShowShareQuiz(true)}
-                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                    className="p-1 text-gray-600 hover:text-purple-600 transition-colors"
                     title="Share Quiz"
                   >
                     <Brain className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => setShowAddResource(true)}
-                    className="p-1 text-green-600 hover:bg-green-50 rounded"
-                    title="Add Resource"
+                    onClick={() => setShowShareResource(true)}
+                    className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                    title="Share Resource"
                   >
                     <FileText className="w-4 h-4" />
                   </button>
                 </div>
               </div>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {sharedContent.map(content => (
-                  <div key={content.id} className="p-3 bg-gray-50 rounded-lg text-sm border border-gray-100">
-                    <div className="flex items-center space-x-2 mb-1">
-                      {content.content_type === 'quiz' ? (
-                        <Brain className="w-4 h-4 text-blue-600" />
-                      ) : (
-                        <FileText className="w-4 h-4 text-green-600" />
-                      )}
-                      <span className="font-medium text-gray-900">
-                        {content.title || (content.content_type === 'quiz' ? 'Shared Quiz' : 'Study Material')}
-                      </span>
-                    </div>
-                    <div className="text-gray-600">Shared by {content.user_name}</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {new Date(content.shared_at).toLocaleTimeString()}
-                    </div>
-                  </div>
-                ))}
-                {sharedContent.length === 0 && (
-                  <div className="text-center py-4">
-                    <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              
+              <div className="space-y-3 max-h-48 overflow-y-auto">
+                {sharedContent.length === 0 ? (
+                  <div className="text-center py-6">
+                    <Share2 className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-500">No content shared yet</p>
-                    <p className="text-xs text-gray-400">Share quizzes and resources to help your study group</p>
+                    <p className="text-xs text-gray-400 mt-1">Share quizzes and resources to collaborate</p>
                   </div>
+                ) : (
+                  sharedContent.map((content) => (
+                    <div key={content.id} className="bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-colors">
+                      <div className="flex items-start space-x-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          content.content_type === 'quiz' ? 'bg-purple-100' :
+                          content.content_type === 'study_material' ? 'bg-blue-100' :
+                          'bg-green-100'
+                        }`}>
+                          {content.content_type === 'quiz' ? (
+                            <Brain className={`w-4 h-4 ${
+                              content.content_type === 'quiz' ? 'text-purple-600' : ''
+                            }`} />
+                          ) : content.content_type === 'study_material' ? (
+                            <FileText className="w-4 h-4 text-blue-600" />
+                          ) : (
+                            <BookOpen className="w-4 h-4 text-green-600" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium text-gray-900 text-sm truncate">
+                              {content.title}
+                            </h4>
+                            <button
+                              onClick={() => accessSharedContent(content)}
+                              className="p-1 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                              title="Open content"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-600 truncate">{content.description}</p>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-xs text-gray-500">by {content.user_name}</span>
+                            <span className="text-xs text-gray-400">
+                              {new Date(content.shared_at).toLocaleTimeString([], { 
+                                hour: '2-digit', 
+                                minute: '2-digit' 
+                              })}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => accessSharedContent(content)}
+                            className="mt-2 w-full flex items-center justify-center space-x-1 px-2 py-1 bg-white border border-gray-200 rounded text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Open</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
             </div>
@@ -1085,32 +1224,43 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             {/* Chat */}
             <div className="flex-1 flex flex-col">
               <div className="p-4 border-b border-gray-200">
-                <h3 className="font-medium text-gray-900">Chat</h3>
+                <h3 className="font-bold text-gray-900 flex items-center">
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Chat
+                </h3>
               </div>
               
-              {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {messages.map(message => (
-                  <div key={message.id} className="text-sm">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="font-medium text-gray-900">{message.user_name}</span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(message.created_at).toLocaleTimeString()}
-                      </span>
-                    </div>
-                    <div className="text-gray-700 break-words">{message.message}</div>
-                  </div>
-                ))}
-                {messages.length === 0 && (
+                {messages.length === 0 ? (
                   <div className="text-center py-8">
-                    <MessageSquare className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <MessageSquare className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-500">No messages yet</p>
                     <p className="text-xs text-gray-400">Start the conversation!</p>
                   </div>
+                ) : (
+                  messages.map((message) => (
+                    <div key={message.id} className="flex space-x-2">
+                      <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
+                        {message.user_name?.charAt(0) || 'U'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-900">{message.user_name}</span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(message.created_at).toLocaleTimeString([], { 
+                              hour: '2-digit', 
+                              minute: '2-digit' 
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-700 break-words">{message.message}</p>
+                      </div>
+                    </div>
+                  ))
                 )}
+                <div ref={messagesEndRef} />
               </div>
               
-              {/* Message Input */}
               <div className="p-4 border-t border-gray-200">
                 <div className="flex space-x-2">
                   <input
@@ -1119,12 +1269,12 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                     placeholder="Type a message..."
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                   />
                   <button
                     onClick={sendMessage}
                     disabled={!newMessage.trim()}
-                    className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Send className="w-4 h-4" />
                   </button>
@@ -1133,387 +1283,82 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             </div>
           </div>
         </div>
-
-        {/* Share Quiz Modal */}
-        {showShareQuiz && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900">Share Quiz</h3>
-                <button
-                  onClick={() => setShowShareQuiz(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <Brain className="w-6 h-6 text-blue-600" />
-                    <h4 className="font-medium text-gray-900">Demo Quiz</h4>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-3">Sample quiz for demonstration purposes</p>
-                  <button
-                    onClick={() => shareQuiz({ title: 'Demo Quiz' })}
-                    className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                  >
-                    Share This Quiz
-                  </button>
-                </div>
-                <div className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <Brain className="w-6 h-6 text-green-600" />
-                    <h4 className="font-medium text-gray-900">Biology Quiz</h4>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-3">Cell structure and function quiz</p>
-                  <button
-                    onClick={() => shareQuiz({ title: 'Biology Quiz' })}
-                    className="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                  >
-                    Share This Quiz
-                  </button>
-                </div>
-                <p className="text-sm text-gray-500 text-center">
-                  More quizzes will appear here when you create them in the Quiz Generator.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Add Resource Modal */}
-        {showAddResource && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900">Add Resource</h3>
-                <button
-                  onClick={() => setShowAddResource(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="p-4 border border-gray-200 rounded-lg hover:border-green-300 transition-colors">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <FileText className="w-6 h-6 text-green-600" />
-                    <h4 className="font-medium text-gray-900">Study Notes</h4>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-3">Comprehensive study material and notes</p>
-                  <button
-                    onClick={() => addResource({ title: 'Study Notes' })}
-                    className="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                  >
-                    Share This Resource
-                  </button>
-                </div>
-                <div className="p-4 border border-gray-200 rounded-lg hover:border-green-300 transition-colors">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <BookOpen className="w-6 h-6 text-blue-600" />
-                    <h4 className="font-medium text-gray-900">Reference Material</h4>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-3">Additional reading and reference documents</p>
-                  <button
-                    onClick={() => addResource({ title: 'Reference Material' })}
-                    className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                  >
-                    Share This Resource
-                  </button>
-                </div>
-                <p className="text-sm text-gray-500 text-center">
-                  Upload and share your study materials with the room.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-8 py-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Study Rooms</h1>
-            <p className="text-gray-600">Join collaborative study sessions with peers</p>
-          </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowJoinRoom(true)}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
-            >
-              <Users className="w-4 h-4" />
-              <span>Join by Code</span>
-            </button>
-            <button
-              onClick={() => setShowCreateRoom(true)}
-              className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl font-medium"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Room</span>
-            </button>
-          </div>
-        </div>
       </div>
 
-      {/* Filters */}
-      <div className="px-8 py-6 bg-white border-b border-gray-200">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search rooms..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-          <div className="flex items-center space-x-4">
-            <select
-              value={filterSubject}
-              onChange={(e) => setFilterSubject(e.target.value)}
-              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            >
-              <option value="all">All Subjects</option>
-              <option value="mathematics">Mathematics</option>
-              <option value="science">Science</option>
-              <option value="history">History</option>
-              <option value="literature">Literature</option>
-              <option value="computer-science">Computer Science</option>
-            </select>
-            <select
-              value={filterDifficulty}
-              onChange={(e) => setFilterDifficulty(e.target.value)}
-              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            >
-              <option value="all">All Levels</option>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Rooms Grid */}
-      <div className="p-8">
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading study rooms...</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredRooms.map(room => (
-              <div key={room.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="font-bold text-gray-900 mb-2">{room.name}</h3>
-                    <p className="text-sm text-gray-600 mb-3">{room.description}</p>
-                  </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    room.difficulty === 'beginner' ? 'bg-green-100 text-green-800' :
-                    room.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {room.difficulty}
-                  </span>
-                </div>
-                
-                <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                  <span>{room.subject}</span>
-                  <span>{room.participant_count}/{room.max_participants} participants</span>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">
-                    by {room.creator_name}
-                  </span>
-                  <button
-                    onClick={() => joinRoom(room.id)}
-                    className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium"
-                  >
-                    Join Room
-                  </button>
-                </div>
-              </div>
-            ))}
-            
-            {filteredRooms.length === 0 && (
-              <div className="col-span-full text-center py-12">
-                <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No rooms found</h3>
-                <p className="text-gray-600">Try adjusting your filters or create a new room</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Create Room Modal */}
-      {showCreateRoom && (
+      {/* Share Quiz Modal */}
+      {showShareQuiz && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-8 w-full max-w-md">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Create Study Room</h2>
-              <button
-                onClick={() => setShowCreateRoom(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Share Quiz</h2>
             
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Room Name</label>
-                <input
-                  type="text"
-                  value={roomForm.name}
-                  onChange={(e) => setRoomForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Enter room name"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                <textarea
-                  value={roomForm.description}
-                  onChange={(e) => setRoomForm(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  rows={3}
-                  placeholder="Describe what you'll be studying"
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
-                  <select
-                    value={roomForm.subject}
-                    onChange={(e) => setRoomForm(prev => ({ ...prev, subject: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="">Select subject</option>
-                    <option value="mathematics">Mathematics</option>
-                    <option value="science">Science</option>
-                    <option value="history">History</option>
-                    <option value="literature">Literature</option>
-                    <option value="computer-science">Computer Science</option>
-                  </select>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h3 className="font-medium text-gray-900 mb-2">Available Quizzes</h3>
+                <div className="space-y-2">
+                  {[
+                    { id: 'quiz-1', title: 'Biology Fundamentals', questions: 10 },
+                    { id: 'quiz-2', title: 'Cell Structure & Function', questions: 15 },
+                    { id: 'quiz-3', title: 'Genetics Basics', questions: 8 }
+                  ].map((quiz) => (
+                    <button
+                      key={quiz.id}
+                      onClick={() => shareQuiz(quiz.id, quiz.title)}
+                      className="w-full text-left p-3 bg-white rounded-lg border border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-colors"
+                    >
+                      <div className="font-medium text-gray-900">{quiz.title}</div>
+                      <div className="text-sm text-gray-600">{quiz.questions} questions</div>
+                    </button>
+                  ))}
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
-                  <select
-                    value={roomForm.difficulty}
-                    onChange={(e) => setRoomForm(prev => ({ ...prev, difficulty: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="beginner">Beginner</option>
-                    <option value="intermediate">Intermediate</option>
-                    <option value="advanced">Advanced</option>
-                  </select>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Max Participants</label>
-                <input
-                  type="number"
-                  min="2"
-                  max="50"
-                  value={roomForm.maxParticipants}
-                  onChange={(e) => setRoomForm(prev => ({ ...prev, maxParticipants: parseInt(e.target.value) }))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-              
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="isPublic"
-                  checked={roomForm.isPublic}
-                  onChange={(e) => setRoomForm(prev => ({ ...prev, isPublic: e.target.checked }))}
-                  className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                />
-                <label htmlFor="isPublic" className="ml-2 text-sm text-gray-700">
-                  Make room public
-                </label>
               </div>
             </div>
-            
-            <div className="flex space-x-4 mt-6">
+
+            <div className="flex space-x-4 mt-8">
               <button
-                onClick={() => setShowCreateRoom(false)}
-                className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => setShowShareQuiz(false)}
+                className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
-              </button>
-              <button
-                onClick={createRoom}
-                disabled={!roomForm.name || !roomForm.subject}
-                className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Create Room
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Join Room Modal */}
-      {showJoinRoom && (
+      {/* Share Resource Modal */}
+      {showShareResource && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-8 w-full max-w-md">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Join Room by Code</h2>
-              <button
-                onClick={() => setShowJoinRoom(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Share Resource</h2>
             
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Room Code</label>
-                <input
-                  type="text"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg font-mono"
-                  placeholder="Enter 6-digit code"
-                  maxLength={6}
-                />
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h3 className="font-medium text-gray-900 mb-2">Available Resources</h3>
+                <div className="space-y-2">
+                  {[
+                    { id: 'resource-1', title: 'Cell Structure Notes', type: 'PDF' },
+                    { id: 'resource-2', title: 'Biology Textbook Chapter 3', type: 'Document' },
+                    { id: 'resource-3', title: 'Mitosis Diagram', type: 'Image' }
+                  ].map((resource) => (
+                    <button
+                      key={resource.id}
+                      onClick={() => shareResource(resource.id, resource.title)}
+                      className="w-full text-left p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                    >
+                      <div className="font-medium text-gray-900">{resource.title}</div>
+                      <div className="text-sm text-gray-600">{resource.type}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-            
-            <div className="flex space-x-4 mt-6">
+
+            <div className="flex space-x-4 mt-8">
               <button
-                onClick={() => setShowJoinRoom(false)}
-                className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => setShowShareResource(false)}
+                className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
-              </button>
-              <button
-                onClick={joinRoomByCode}
-                disabled={joinCode.length !== 6}
-                className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Join Room
               </button>
             </div>
           </div>

@@ -28,7 +28,8 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
-  X
+  X,
+  Plus
 } from 'lucide-react';
 import { useQuizGenerator } from '../hooks/useQuizGenerator';
 import { generateVideoWithTavus } from '../lib/tavus';
@@ -275,9 +276,9 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate }) => {
           <div className="flex items-center space-x-3">
             <button
               onClick={() => setShowNewQuizConfirmation(true)}
-              className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+              className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl font-medium"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <Plus className="w-4 h-4" />
               <span>New Quiz</span>
             </button>
           </div>

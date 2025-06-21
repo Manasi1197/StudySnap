@@ -1,9 +1,24 @@
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true // Note: In production, API calls should go through your backend
-});
+// Initialize OpenAI client lazily to avoid errors when API key is not set
+let openaiClient: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (!openaiClient) {
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    
+    if (!apiKey) {
+      throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your .env file.');
+    }
+    
+    openaiClient = new OpenAI({
+      apiKey,
+      dangerouslyAllowBrowser: true // Note: In production, API calls should go through your backend
+    });
+  }
+  
+  return openaiClient;
+}
 
 export interface GenerateQuizRequest {
   content: string;
@@ -73,6 +88,8 @@ function cleanJsonResponse(content: string): string {
 }
 
 export async function generateQuizWithAI(request: GenerateQuizRequest): Promise<GeneratedQuizResponse> {
+  const openai = getOpenAIClient();
+  
   // GPT-4o can handle longer content better
   const maxContentLength = 8000;
   const truncatedContent = request.content.length > maxContentLength 
@@ -191,6 +208,8 @@ Ensure all content is educationally sound and promotes effective learning.
 }
 
 export async function extractTextFromImage(imageBase64: string): Promise<string> {
+  const openai = getOpenAIClient();
+  
   const prompt = `
 Please extract all text content from this image. If it contains educational material like notes, diagrams, or textbook content, provide a clean, well-formatted transcription. If there are any diagrams or visual elements, describe them briefly.
 
@@ -243,6 +262,8 @@ export async function generateVideoExplanation(question: string, explanation: st
 }
 
 export async function translateContent(content: string, targetLanguage: string): Promise<string> {
+  const openai = getOpenAIClient();
+  
   const prompt = `
 Translate the following educational content to ${targetLanguage}. Maintain the educational context and technical terms appropriately. Ensure the translation is natural and pedagogically sound:
 

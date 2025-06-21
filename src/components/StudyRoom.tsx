@@ -45,7 +45,18 @@ import {
   Copy,
   ExternalLink,
   Download,
-  ArrowLeft
+  ArrowLeft,
+  Upload,
+  Link,
+  Monitor,
+  PenTool,
+  Eraser,
+  Square,
+  Circle,
+  Type as TypeIcon,
+  Palette,
+  Save,
+  Trash2
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
@@ -62,7 +73,6 @@ interface StudyRoom {
   is_public: boolean;
   created_by: string;
   created_at: string;
-  session_type: 'study' | 'quiz' | 'discussion' | 'presentation';
   tags: string[];
   room_code: string;
   status: 'active' | 'scheduled' | 'ended';
@@ -95,6 +105,26 @@ interface ChatMessage {
   };
 }
 
+interface StudyResource {
+  id: string;
+  name: string;
+  type: 'pdf' | 'link' | 'image' | 'document';
+  url: string;
+  uploaded_by: string;
+  uploaded_at: string;
+  size?: number;
+}
+
+interface SharedQuiz {
+  id: string;
+  title: string;
+  description: string;
+  questions: any[];
+  flashcards: any[];
+  shared_by: string;
+  shared_at: string;
+}
+
 interface StudyRoomProps {
   onNavigate: (page: string) => void;
 }
@@ -113,6 +143,8 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showResourceModal, setShowResourceModal] = useState(false);
+  const [showQuizShareModal, setShowQuizShareModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [studyTimer, setStudyTimer] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
@@ -120,10 +152,18 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [pomodoroSession, setPomodoroSession] = useState(1);
   const [showParticipants, setShowParticipants] = useState(true);
   const [showWhiteboard, setShowWhiteboard] = useState(false);
-  const [sharedQuizzes, setSharedQuizzes] = useState<any[]>([]);
+  const [sharedQuizzes, setSharedQuizzes] = useState<SharedQuiz[]>([]);
+  const [studyResources, setStudyResources] = useState<StudyResource[]>([]);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [whiteboardTool, setWhiteboardTool] = useState<'pen' | 'eraser' | 'text' | 'rectangle' | 'circle'>('pen');
+  const [whiteboardColor, setWhiteboardColor] = useState('#000000');
+  const [whiteboardStrokes, setWhiteboardStrokes] = useState<any[]>([]);
+  const [userQuizzes, setUserQuizzes] = useState<any[]>([]);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Subjects for filtering
   const subjects = [
@@ -134,13 +174,17 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
   useEffect(() => {
     loadStudyRooms();
-  }, []);
+    if (user) {
+      loadUserQuizzes();
+    }
+  }, [user]);
 
   useEffect(() => {
     if (currentRoom) {
       loadParticipants();
       loadChatMessages();
       loadSharedQuizzes();
+      loadStudyResources();
       
       // Set up real-time subscriptions
       const participantsSubscription = supabase
@@ -159,9 +203,21 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         )
         .subscribe();
 
+      const contentSubscription = supabase
+        .channel(`room_content_${currentRoom.id}`)
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'room_shared_content', filter: `room_id=eq.${currentRoom.id}` },
+          () => {
+            loadSharedQuizzes();
+            loadStudyResources();
+          }
+        )
+        .subscribe();
+
       return () => {
         participantsSubscription.unsubscribe();
         chatSubscription.unsubscribe();
+        contentSubscription.unsubscribe();
       };
     }
   }, [currentRoom]);
@@ -252,6 +308,23 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     }
   };
 
+  const loadUserQuizzes = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('quizzes')
+        .select('id, title, description, questions, flashcards')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setUserQuizzes(data || []);
+    } catch (error) {
+      console.error('Error loading user quizzes:', error);
+    }
+  };
+
   const loadParticipants = async () => {
     if (!currentRoom) return;
 
@@ -307,21 +380,64 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         .from('room_shared_content')
         .select(`
           *,
-          quizzes (
-            id,
-            title,
-            description,
-            questions,
-            flashcards
+          profiles:user_id (
+            full_name
           )
         `)
         .eq('room_id', currentRoom.id)
-        .eq('content_type', 'quiz');
+        .eq('content_type', 'quiz')
+        .order('shared_at', { ascending: false });
 
       if (error) throw error;
-      setSharedQuizzes(data || []);
+
+      // Transform the data to match our SharedQuiz interface
+      const quizzes = data?.map(item => ({
+        id: item.content_id || item.id,
+        title: `Shared Quiz`,
+        description: 'Quiz shared in study room',
+        questions: [],
+        flashcards: [],
+        shared_by: item.profiles?.full_name || 'Unknown User',
+        shared_at: item.shared_at
+      })) || [];
+
+      setSharedQuizzes(quizzes);
     } catch (error) {
       console.error('Error loading shared quizzes:', error);
+    }
+  };
+
+  const loadStudyResources = async () => {
+    if (!currentRoom) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('room_shared_content')
+        .select(`
+          *,
+          profiles:user_id (
+            full_name
+          )
+        `)
+        .eq('room_id', currentRoom.id)
+        .eq('content_type', 'file')
+        .order('shared_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Transform the data to match our StudyResource interface
+      const resources = data?.map(item => ({
+        id: item.id,
+        name: 'Study Resource',
+        type: 'document' as const,
+        url: '#',
+        uploaded_by: item.profiles?.full_name || 'Unknown User',
+        uploaded_at: item.shared_at
+      })) || [];
+
+      setStudyResources(resources);
+    } catch (error) {
+      console.error('Error loading study resources:', error);
     }
   };
 
@@ -475,6 +591,121 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     }
   };
 
+  const shareQuiz = async (quizId: string) => {
+    if (!currentRoom || !user) return;
+
+    try {
+      await supabase
+        .from('room_shared_content')
+        .insert({
+          room_id: currentRoom.id,
+          user_id: user.id,
+          content_type: 'quiz',
+          content_id: quizId
+        });
+
+      // Add system message
+      await supabase
+        .from('room_messages')
+        .insert({
+          room_id: currentRoom.id,
+          user_id: user.id,
+          message: `${user.user_metadata?.full_name || user.email} shared a quiz`,
+          message_type: 'quiz_share'
+        });
+
+      toast.success('Quiz shared successfully!');
+      setShowQuizShareModal(false);
+    } catch (error) {
+      console.error('Error sharing quiz:', error);
+      toast.error('Failed to share quiz');
+    }
+  };
+
+  const addResource = async (resourceData: { name: string; url: string; type: string }) => {
+    if (!currentRoom || !user) return;
+
+    try {
+      await supabase
+        .from('room_shared_content')
+        .insert({
+          room_id: currentRoom.id,
+          user_id: user.id,
+          content_type: 'file',
+          content_id: null // We'll store resource data differently for files
+        });
+
+      // Add system message
+      await supabase
+        .from('room_messages')
+        .insert({
+          room_id: currentRoom.id,
+          user_id: user.id,
+          message: `${user.user_metadata?.full_name || user.email} shared a resource: ${resourceData.name}`,
+          message_type: 'file'
+        });
+
+      toast.success('Resource added successfully!');
+      setShowResourceModal(false);
+    } catch (error) {
+      console.error('Error adding resource:', error);
+      toast.error('Failed to add resource');
+    }
+  };
+
+  const startScreenShare = async () => {
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true
+        });
+        
+        setIsScreenSharing(true);
+        toast.success('Screen sharing started!');
+        
+        // Add system message
+        if (currentRoom && user) {
+          await supabase
+            .from('room_messages')
+            .insert({
+              room_id: currentRoom.id,
+              user_id: user.id,
+              message: `${user.user_metadata?.full_name || user.email} started screen sharing`,
+              message_type: 'system'
+            });
+        }
+
+        // Handle stream end
+        stream.getVideoTracks()[0].onended = () => {
+          setIsScreenSharing(false);
+          toast.info('Screen sharing stopped');
+        };
+      } else {
+        toast.error('Screen sharing not supported in this browser');
+      }
+    } catch (error) {
+      console.error('Error starting screen share:', error);
+      toast.error('Failed to start screen sharing');
+    }
+  };
+
+  const stopScreenShare = () => {
+    setIsScreenSharing(false);
+    toast.info('Screen sharing stopped');
+  };
+
+  const clearWhiteboard = () => {
+    setWhiteboardStrokes([]);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -506,7 +737,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       difficulty: 'intermediate',
       max_participants: 10,
       is_public: true,
-      session_type: 'study',
       tags: []
     });
 
@@ -578,32 +808,16 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Max Participants</label>
-                <input
-                  type="number"
-                  min="2"
-                  max="50"
-                  value={formData.max_participants}
-                  onChange={(e) => setFormData(prev => ({ ...prev, max_participants: parseInt(e.target.value) }))}
-                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Session Type</label>
-                <select
-                  value={formData.session_type}
-                  onChange={(e) => setFormData(prev => ({ ...prev, session_type: e.target.value }))}
-                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="study">Study Session</option>
-                  <option value="quiz">Quiz Practice</option>
-                  <option value="discussion">Discussion</option>
-                  <option value="presentation">Presentation</option>
-                </select>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Max Participants</label>
+              <input
+                type="number"
+                min="2"
+                max="50"
+                value={formData.max_participants}
+                onChange={(e) => setFormData(prev => ({ ...prev, max_participants: parseInt(e.target.value) }))}
+                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
 
             <div>
@@ -696,6 +910,167 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               Join Room
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Add Resource Modal
+  const AddResourceModal = () => {
+    const [resourceData, setResourceData] = useState({
+      name: '',
+      url: '',
+      type: 'link'
+    });
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-8 w-full max-w-md relative">
+          <button
+            onClick={() => setShowResourceModal(false)}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Upload className="w-8 h-8 text-green-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Add Resource</h2>
+            <p className="text-gray-600">Share a study resource with the group</p>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Resource Name</label>
+              <input
+                type="text"
+                value={resourceData.name}
+                onChange={(e) => setResourceData(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="e.g., Chapter 5 Notes"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+              <select
+                value={resourceData.type}
+                onChange={(e) => setResourceData(prev => ({ ...prev, type: e.target.value }))}
+                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="link">Web Link</option>
+                <option value="pdf">PDF Document</option>
+                <option value="image">Image</option>
+                <option value="document">Document</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {resourceData.type === 'link' ? 'URL' : 'File'}
+              </label>
+              {resourceData.type === 'link' ? (
+                <input
+                  type="url"
+                  value={resourceData.url}
+                  onChange={(e) => setResourceData(prev => ({ ...prev, url: e.target.value }))}
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="https://example.com"
+                />
+              ) : (
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-600">Click to upload file</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setResourceData(prev => ({ ...prev, name: file.name }));
+                        toast.success('File selected (upload functionality coming soon)');
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="mt-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Choose File
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex space-x-4">
+              <button
+                onClick={() => setShowResourceModal(false)}
+                className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => addResource(resourceData)}
+                disabled={!resourceData.name.trim() || (!resourceData.url.trim() && resourceData.type === 'link')}
+                className="flex-1 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add Resource
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Share Quiz Modal
+  const ShareQuizModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-md relative max-h-[80vh] overflow-y-auto">
+        <button
+          onClick={() => setShowQuizShareModal(false)}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Brain className="w-8 h-8 text-blue-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Share Quiz</h2>
+          <p className="text-gray-600">Choose a quiz to share with the study group</p>
+        </div>
+
+        <div className="space-y-4">
+          {userQuizzes.length === 0 ? (
+            <div className="text-center py-8">
+              <Brain className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-600">No quizzes available</p>
+              <p className="text-sm text-gray-500">Create a quiz first to share it</p>
+            </div>
+          ) : (
+            userQuizzes.map(quiz => (
+              <div key={quiz.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                <h4 className="font-medium text-gray-900 mb-1">{quiz.title}</h4>
+                <p className="text-sm text-gray-600 mb-3">{quiz.description}</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">
+                    {quiz.questions?.length || 0} questions
+                  </span>
+                  <button
+                    onClick={() => shareQuiz(quiz.id)}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+                  >
+                    Share
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -810,12 +1185,19 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    <FileText className="w-4 h-4" />
+                    <PenTool className="w-4 h-4" />
                     <span>Whiteboard</span>
                   </button>
-                  <button className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                    <Share2 className="w-4 h-4" />
-                    <span>Share Screen</span>
+                  <button 
+                    onClick={isScreenSharing ? stopScreenShare : startScreenShare}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                      isScreenSharing 
+                        ? 'bg-red-100 text-red-700' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Monitor className="w-4 h-4" />
+                    <span>{isScreenSharing ? 'Stop Sharing' : 'Share Screen'}</span>
                   </button>
                 </div>
               </div>
@@ -824,14 +1206,104 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             {/* Whiteboard/Content Area */}
             <div className="flex-1 p-6">
               {showWhiteboard ? (
-                <div className="bg-white rounded-xl border border-gray-200 h-full flex items-center justify-center">
-                  <div className="text-center text-gray-500">
-                    <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                    <h3 className="text-lg font-medium mb-2">Collaborative Whiteboard</h3>
-                    <p>Draw, write, and share ideas with your study group</p>
-                    <button className="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
-                      Start Drawing
-                    </button>
+                <div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col">
+                  {/* Whiteboard Tools */}
+                  <div className="border-b border-gray-200 p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => setWhiteboardTool('pen')}
+                            className={`p-2 rounded-lg transition-colors ${
+                              whiteboardTool === 'pen' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            <PenTool className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setWhiteboardTool('eraser')}
+                            className={`p-2 rounded-lg transition-colors ${
+                              whiteboardTool === 'eraser' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            <Eraser className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setWhiteboardTool('rectangle')}
+                            className={`p-2 rounded-lg transition-colors ${
+                              whiteboardTool === 'rectangle' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            <Square className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setWhiteboardTool('circle')}
+                            className={`p-2 rounded-lg transition-colors ${
+                              whiteboardTool === 'circle' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            <Circle className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setWhiteboardTool('text')}
+                            className={`p-2 rounded-lg transition-colors ${
+                              whiteboardTool === 'text' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            <TypeIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <Palette className="w-4 h-4 text-gray-600" />
+                          <input
+                            type="color"
+                            value={whiteboardColor}
+                            onChange={(e) => setWhiteboardColor(e.target.value)}
+                            className="w-8 h-8 rounded border border-gray-300"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={clearWhiteboard}
+                          className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Clear</span>
+                        </button>
+                        <button className="flex items-center space-x-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors">
+                          <Save className="w-4 h-4" />
+                          <span>Save</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Canvas */}
+                  <div className="flex-1 p-4">
+                    <canvas
+                      ref={canvasRef}
+                      width={800}
+                      height={600}
+                      className="w-full h-full border border-gray-200 rounded-lg bg-white cursor-crosshair"
+                      onMouseDown={(e) => {
+                        // Basic drawing functionality placeholder
+                        const canvas = canvasRef.current;
+                        if (canvas && whiteboardTool === 'pen') {
+                          const ctx = canvas.getContext('2d');
+                          if (ctx) {
+                            ctx.strokeStyle = whiteboardColor;
+                            ctx.lineWidth = 2;
+                            ctx.lineCap = 'round';
+                            ctx.beginPath();
+                            const rect = canvas.getBoundingClientRect();
+                            ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+                          }
+                        }
+                      }}
+                    />
                   </div>
                 </div>
               ) : (
@@ -840,7 +1312,10 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                   <div className="bg-white rounded-xl border border-gray-200 p-6">
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-bold text-gray-900">Shared Quizzes</h3>
-                      <button className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                      <button 
+                        onClick={() => setShowQuizShareModal(true)}
+                        className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                      >
                         <Plus className="w-4 h-4" />
                         <span>Share Quiz</span>
                       </button>
@@ -855,11 +1330,11 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                       ) : (
                         sharedQuizzes.map((quiz, index) => (
                           <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                            <h4 className="font-medium text-gray-900">{quiz.quizzes?.title}</h4>
-                            <p className="text-sm text-gray-600 mt-1">{quiz.quizzes?.description}</p>
+                            <h4 className="font-medium text-gray-900">{quiz.title}</h4>
+                            <p className="text-sm text-gray-600 mt-1">Shared by {quiz.shared_by}</p>
                             <div className="flex items-center justify-between mt-3">
                               <span className="text-xs text-gray-500">
-                                {quiz.quizzes?.questions?.length} questions
+                                {new Date(quiz.shared_at).toLocaleDateString()}
                               </span>
                               <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
                                 Take Quiz
@@ -875,15 +1350,39 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                   <div className="bg-white rounded-xl border border-gray-200 p-6">
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-bold text-gray-900">Study Resources</h3>
-                      <button className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                      <button 
+                        onClick={() => setShowResourceModal(true)}
+                        className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                      >
                         <Plus className="w-4 h-4" />
                         <span>Add Resource</span>
                       </button>
                     </div>
-                    <div className="text-center text-gray-500 py-8">
-                      <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                      <p>No resources shared yet</p>
-                      <p className="text-sm">Upload notes, PDFs, or links to share</p>
+                    <div className="space-y-4">
+                      {studyResources.length === 0 ? (
+                        <div className="text-center text-gray-500 py-8">
+                          <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                          <p>No resources shared yet</p>
+                          <p className="text-sm">Upload notes, PDFs, or links to share</p>
+                        </div>
+                      ) : (
+                        studyResources.map((resource, index) => (
+                          <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                                <FileText className="w-4 h-4 text-green-600" />
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="font-medium text-gray-900">{resource.name}</h4>
+                                <p className="text-sm text-gray-600">Shared by {resource.uploaded_by}</p>
+                              </div>
+                              <button className="text-blue-600 hover:text-blue-700">
+                                <ExternalLink className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
@@ -999,6 +1498,10 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             </div>
           </div>
         </div>
+
+        {/* Modals */}
+        {showResourceModal && <AddResourceModal />}
+        {showQuizShareModal && <ShareQuizModal />}
       </div>
     );
   }
@@ -1145,14 +1648,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                 </div>
 
                 <div className="flex items-center space-x-2 mb-4">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    room.session_type === 'study' ? 'bg-blue-100 text-blue-800' :
-                    room.session_type === 'quiz' ? 'bg-green-100 text-green-800' :
-                    room.session_type === 'discussion' ? 'bg-purple-100 text-purple-800' :
-                    'bg-orange-100 text-orange-800'
-                  }`}>
-                    {room.session_type}
-                  </span>
                   <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
                     Active
                   </span>

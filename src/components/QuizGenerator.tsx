@@ -31,10 +31,10 @@ import {
   X,
   Plus,
   TestTube,
-  Bug
+  Key
 } from 'lucide-react';
 import { useQuizGenerator } from '../hooks/useQuizGenerator';
-import { generateAudioWithElevenLabs, testElevenLabsApiKey, updateElevenLabsApiKey, debugElevenLabsIntegration } from '../lib/elevenlabs';
+import { generateAudioWithElevenLabs, testElevenLabsApiKey, updateElevenLabsApiKey } from '../lib/elevenlabs';
 import ApiKeyManager from './ApiKeyManager';
 import toast from 'react-hot-toast';
 
@@ -56,7 +56,6 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
   const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
   const [audioGenerationProgress, setAudioGenerationProgress] = useState<string>('');
   const [isTestingApiKey, setIsTestingApiKey] = useState(false);
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
   const [quizSettings, setQuizSettings] = useState({
     questionCount: 10,
     difficulty: 'mixed',
@@ -91,6 +90,9 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
   const MIN_WORDS_REQUIRED = 50; // Minimum 50 words required
   const totalWords = getTotalContentLength();
   const hasMinimumContent = totalWords >= MIN_WORDS_REQUIRED;
+
+  // Check if OpenAI API key is configured
+  const hasOpenAIKey = !!import.meta.env.VITE_OPENAI_API_KEY;
 
   // File upload handling
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -142,22 +144,13 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
     }
   };
 
-  // Debug ElevenLabs Integration
-  const handleDebugElevenLabs = async () => {
-    setShowDebugInfo(true);
-    toast.loading('Running ElevenLabs integration debug...', { duration: 2000 });
-    
-    try {
-      await debugElevenLabsIntegration();
-      toast.success('Debug completed! Check console for detailed logs.');
-    } catch (error) {
-      console.error('Debug error:', error);
-      toast.error('Debug failed. Check console for details.');
-    }
-  };
-
   // Generate quiz from content
   const handleGenerateQuiz = async () => {
+    if (!hasOpenAIKey) {
+      toast.error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
+      return;
+    }
+
     if (!hasMinimumContent) {
       toast.error(`Please provide at least ${MIN_WORDS_REQUIRED} words of content to generate a meaningful quiz. Current: ${totalWords} words.`);
       return;
@@ -388,14 +381,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
               ) : (
                 <TestTube className="w-4 h-4" />
               )}
-              <span>Test API</span>
-            </button>
-            <button
-              onClick={handleDebugElevenLabs}
-              className="flex items-center space-x-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors"
-            >
-              <Bug className="w-4 h-4" />
-              <span>Debug</span>
+              <span>Test ElevenLabs</span>
             </button>
             <button
               onClick={() => setShowNewQuizConfirmation(true)}
@@ -620,6 +606,12 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
           <div className="flex-1">
             <h2 className="text-2xl font-bold text-gray-900">AI Quiz Generator</h2>
             <p className="text-gray-600">Transform your notes into interactive quizzes, flashcards, and audio guides</p>
+            {!hasOpenAIKey && (
+              <div className="mt-2 flex items-center space-x-2 text-orange-600">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm">OpenAI API key not configured. Please set VITE_OPENAI_API_KEY.</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-3">
             <button
@@ -632,14 +624,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
               ) : (
                 <TestTube className="w-4 h-4" />
               )}
-              <span>Test ElevenLabs API</span>
-            </button>
-            <button
-              onClick={handleDebugElevenLabs}
-              className="flex items-center space-x-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors"
-            >
-              <Bug className="w-4 h-4" />
-              <span>Debug</span>
+              <span>Test ElevenLabs</span>
             </button>
             <button
               onClick={() => setShowSettings(!showSettings)}
@@ -651,6 +636,24 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             </button>
           </div>
         </div>
+
+        {/* API Key Status */}
+        {!hasOpenAIKey && (
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-6">
+            <div className="flex items-center space-x-3">
+              <Key className="w-6 h-6 text-orange-600" />
+              <div>
+                <h3 className="font-bold text-orange-900">OpenAI API Key Required</h3>
+                <p className="text-orange-800 text-sm mt-1">
+                  To generate quizzes with AI, please configure your OpenAI API key in the environment variables.
+                </p>
+                <p className="text-orange-700 text-xs mt-2">
+                  Set VITE_OPENAI_API_KEY in your .env file and restart the application.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Content Length Indicator */}
         <div className="bg-white rounded-xl p-6 border border-gray-200">
@@ -965,7 +968,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
         <div className="max-w-full">
           <button
             onClick={handleGenerateQuiz}
-            disabled={!hasMinimumContent || isGenerating}
+            disabled={!hasMinimumContent || isGenerating || !hasOpenAIKey}
             className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 shadow-lg hover:shadow-xl"
           >
             {isGenerating ? (
@@ -983,6 +986,11 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
           {!hasMinimumContent && (
             <p className="text-center text-sm text-orange-600 mt-2">
               Need {MIN_WORDS_REQUIRED - totalWords} more words to generate quiz
+            </p>
+          )}
+          {!hasOpenAIKey && (
+            <p className="text-center text-sm text-red-600 mt-2">
+              OpenAI API key required to generate quiz
             </p>
           )}
         </div>

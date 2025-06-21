@@ -273,13 +273,14 @@ Good luck with your studies!
 async function pollForVideoCompletion(
   videoId: string, 
   onApiKeyError?: (error: TavusError) => void,
-  maxAttempts: number = 20 // Reduced from 30 to 20 for faster timeout
+  maxAttempts: number = 40 // Increased from 20 to 40 for 10-minute timeout
 ): Promise<string> {
   console.log(`🔄 Starting to poll for video completion (ID: ${videoId})`);
+  console.log(`⏰ Maximum polling time: ${(maxAttempts * 15) / 60} minutes`);
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      console.log(`📡 Polling attempt ${attempt + 1}/${maxAttempts}`);
+      console.log(`📡 Polling attempt ${attempt + 1}/${maxAttempts} (${Math.round((attempt / maxAttempts) * 100)}% complete)`);
       
       const response = await fetch(`${TAVUS_API_BASE_URL}/videos/${videoId}`, {
         headers: {
@@ -327,8 +328,9 @@ async function pollForVideoCompletion(
         throw new Error('Video generation failed');
       }
 
-      // Wait 15 seconds before next poll (increased from 10)
-      console.log('⏱️ Waiting 15 seconds before next check...');
+      // Wait 15 seconds before next poll
+      const remainingTime = Math.round(((maxAttempts - attempt - 1) * 15) / 60);
+      console.log(`⏱️ Waiting 15 seconds before next check... (${remainingTime} minutes remaining)`);
       await new Promise(resolve => setTimeout(resolve, 15000));
 
     } catch (error: any) {
@@ -349,8 +351,8 @@ async function pollForVideoCompletion(
     }
   }
 
-  console.error('⏰ Video generation timed out');
-  throw new Error('Video generation timed out after 5 minutes');
+  console.error('⏰ Video generation timed out after 10 minutes');
+  throw new Error('Video generation timed out after 10 minutes. The video may still be processing - please try again later.');
 }
 
 export async function getVideoStatus(videoId: string): Promise<TavusVideoResponse> {

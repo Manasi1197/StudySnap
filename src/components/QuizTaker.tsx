@@ -25,7 +25,7 @@ interface Quiz {
 interface QuizTakerProps {
   quiz: Quiz;
   onBack: () => void;
-  onNavigate?: (page: string, data?: any) => void;
+  onNavigate?: (targetView: 'video' | 'flashcards' | 'take-quiz') => void;
 }
 
 const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {

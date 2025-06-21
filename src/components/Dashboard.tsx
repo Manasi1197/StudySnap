@@ -33,9 +33,6 @@ import {
   LogOut
 } from 'lucide-react';
 import QuizGenerator from './QuizGenerator';
-import VideoPlayer from './VideoPlayer';
-import FlashcardsViewer from './FlashcardsViewer';
-import QuizTaker from './QuizTaker';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 
@@ -46,9 +43,6 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavigate }) => {
   const { user, signOut } = useAuth();
-  const [currentSubPage, setCurrentSubPage] = React.useState<string | null>(null);
-  const [subPageData, setSubPageData] = React.useState<any>(null);
-  const [quizGeneratorState, setQuizGeneratorState] = React.useState<any>(null);
 
   const handleSignOut = async () => {
     try {
@@ -59,34 +53,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
       }
     } catch (error) {
       toast.error('Error signing out');
-    }
-  };
-
-  const handleSubPageNavigation = (page: string, data?: any) => {
-    // Store the current quiz generator state when navigating to sub-pages
-    if (page === 'video-player' || page === 'flashcards' || page === 'take-quiz') {
-      setQuizGeneratorState(data);
-    }
-    setCurrentSubPage(page);
-    setSubPageData(data);
-  };
-
-  const handleBackToQuizOverview = () => {
-    // Return to the quiz overview (review step) with preserved state
-    setCurrentSubPage(null);
-    setSubPageData(null);
-    // The QuizGenerator will remain in 'review' state showing the overview
-  };
-
-  const handleNavigateFromSubPage = (targetPage: string, data?: any) => {
-    if (targetPage === 'quiz-overview') {
-      handleBackToQuizOverview();
-    } else if (targetPage === 'video-player') {
-      handleSubPageNavigation('video-player', data);
-    } else if (targetPage === 'flashcards') {
-      handleSubPageNavigation('flashcards', data);
-    } else if (targetPage === 'take-quiz') {
-      handleSubPageNavigation('take-quiz', data);
     }
   };
 
@@ -202,47 +168,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
   };
 
   const renderMainContent = () => {
-    // Handle sub-pages for quiz generator
-    if (currentPage === 'quiz-generator') {
-      if (currentSubPage === 'video-player' && subPageData) {
-        return (
-          <VideoPlayer
-            title={subPageData.title}
-            description={subPageData.description}
-            videoUrl={subPageData.videoUrl}
-            onBack={handleBackToQuizOverview}
-            onNavigate={handleNavigateFromSubPage}
-            quizData={quizGeneratorState}
-          />
-        );
-      }
-      
-      if (currentSubPage === 'flashcards' && subPageData) {
-        return (
-          <FlashcardsViewer
-            title={subPageData.title}
-            flashcards={subPageData.flashcards}
-            onBack={handleBackToQuizOverview}
-            onNavigate={handleNavigateFromSubPage}
-            quizData={quizGeneratorState}
-          />
-        );
-      }
-
-      if (currentSubPage === 'take-quiz' && subPageData) {
-        return (
-          <QuizTaker
-            quiz={subPageData.quiz}
-            onBack={handleBackToQuizOverview}
-            onNavigate={handleNavigateFromSubPage}
-          />
-        );
-      }
-      
-      return <QuizGenerator onNavigate={handleSubPageNavigation} />;
-    }
-
     switch (currentPage) {
+      case 'quiz-generator':
+        return <QuizGenerator />;
       case 'study-rooms':
         return (
           <div className="text-center pt-20">
@@ -436,8 +364,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar - Hide for sub-pages */}
-      {!(currentPage === 'quiz-generator' && currentSubPage) && (
+      {/* Sidebar - Hide for quiz generator */}
+      {currentPage !== 'quiz-generator' && (
         <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
           {/* Logo */}
           <div className="p-6 border-b border-gray-200">
@@ -508,8 +436,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Header - Hide for sub-pages */}
-        {!(currentPage === 'quiz-generator' && currentSubPage) && (
+        {/* Header - Hide for quiz generator */}
+        {currentPage !== 'quiz-generator' && (
           <header className="bg-white border-b border-gray-200 px-8 py-6">
             <div className="flex items-center justify-between">
               <div>
@@ -544,10 +472,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         )}
 
         {/* Dashboard Content */}
-        <main className={`flex-1 ${!(currentPage === 'quiz-generator' && currentSubPage) ? 'p-8' : ''}`}>
+        <main className={`flex-1 ${currentPage !== 'quiz-generator' ? 'p-8' : ''}`}>
           {/* Conditional container width based on current page */}
-          {currentPage === 'quiz-generator' || currentSubPage ? (
-            // Full width for Quiz Generator and sub-pages
+          {currentPage === 'quiz-generator' ? (
+            // Full width for Quiz Generator
             <div className="w-full">
               {renderMainContent()}
             </div>

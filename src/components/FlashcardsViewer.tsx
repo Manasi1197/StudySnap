@@ -12,7 +12,7 @@ interface FlashcardsViewerProps {
   title: string;
   flashcards: Flashcard[];
   onBack: () => void;
-  onNavigate?: (page: string, data?: any) => void;
+  onNavigate?: (targetView: 'video' | 'flashcards' | 'take-quiz') => void;
   quizData?: any;
 }
 
@@ -66,20 +66,14 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
   };
 
   const handleNavigateToVideo = () => {
-    if (onNavigate && quizData) {
-      onNavigate('video-player', {
-        title: quizData.title,
-        description: quizData.description,
-        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
-      });
+    if (onNavigate) {
+      onNavigate('video');
     }
   };
 
   const handleNavigateToQuiz = () => {
-    if (onNavigate && quizData) {
-      onNavigate('take-quiz', {
-        quiz: quizData
-      });
+    if (onNavigate) {
+      onNavigate('take-quiz');
     }
   };
 

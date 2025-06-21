@@ -6,7 +6,7 @@ interface VideoPlayerProps {
   description: string;
   videoUrl: string;
   onBack: () => void;
-  onNavigate?: (page: string, data?: any) => void;
+  onNavigate?: (targetView: 'video' | 'flashcards' | 'take-quiz') => void;
   quizData?: any;
 }
 
@@ -22,19 +22,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isMuted, setIsMuted] = useState(false);
 
   const handleNavigateToFlashcards = () => {
-    if (onNavigate && quizData) {
-      onNavigate('flashcards', {
-        title: quizData.title,
-        flashcards: quizData.flashcards
-      });
+    if (onNavigate) {
+      onNavigate('flashcards');
     }
   };
 
   const handleNavigateToQuiz = () => {
-    if (onNavigate && quizData) {
-      onNavigate('take-quiz', {
-        quiz: quizData
-      });
+    if (onNavigate) {
+      onNavigate('take-quiz');
     }
   };
 

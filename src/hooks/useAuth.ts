@@ -8,15 +8,33 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('Error getting session:', error);
+    // Get initial session with proper error handling
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          // Clear any stale session data
+          await supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
+      } catch (error) {
+        console.error('Failed to initialize auth:', error);
+        // Clear any stale session data
+        await supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    };
+
+    initializeAuth();
 
     // Listen for auth changes
     const {
@@ -24,8 +42,14 @@ export function useAuth() {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state change:', event, session?.user?.id);
       
-      setSession(session);
-      setUser(session?.user ?? null);
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setUser(null);
+      } else {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
+      
       setLoading(false);
 
       // Handle user sign up - ensure profile is created

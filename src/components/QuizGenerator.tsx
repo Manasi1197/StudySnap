@@ -37,10 +37,13 @@ import toast from 'react-hot-toast';
 
 interface QuizGeneratorProps {
   onNavigate?: (page: string, data?: any) => void;
+  initialGeneratedQuiz?: any;
 }
 
-const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate }) => {
-  const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'review'>('upload');
+const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGeneratedQuiz }) => {
+  const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'review'>(
+    initialGeneratedQuiz ? 'review' : 'upload'
+  );
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [showSettings, setShowSettings] = useState(false);
   const [showNewQuizConfirmation, setShowNewQuizConfirmation] = useState(false);
@@ -64,8 +67,8 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate }) => {
     generateQuiz,
     addFiles,
     removeFile,
-    reset
-  } = useQuizGenerator();
+    reset: resetQuizGeneratorHook
+  } = useQuizGenerator(initialGeneratedQuiz);
 
   // Calculate total content length for minimum word validation
   const getTotalContentLength = () => {
@@ -210,7 +213,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate }) => {
   const resetGenerator = () => {
     setCurrentStep('upload');
     setGeneratedVideoUrl(null);
-    reset();
+    resetQuizGeneratorHook();
   };
 
   // New Quiz Confirmation Modal

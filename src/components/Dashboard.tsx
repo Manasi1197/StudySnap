@@ -272,7 +272,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         );
       }
       
-      return <QuizGenerator onNavigate={handleSubPageNavigation} />;
+      return (
+        <QuizGenerator 
+          onNavigate={handleSubPageNavigation} 
+          initialGeneratedQuiz={quizGeneratorState?.quiz}
+        />
+      );
     }
 
     switch (currentPage) {

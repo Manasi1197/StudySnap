@@ -280,10 +280,10 @@ const generateMockQuiz = (content: string, settings: any): GeneratedQuiz => {
   };
 };
 
-export function useQuizGenerator() {
+export function useQuizGenerator(initialQuiz?: GeneratedQuiz) {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [textInput, setTextInput] = useState('');
-  const [generatedQuiz, setGeneratedQuiz] = useState<GeneratedQuiz | null>(null);
+  const [generatedQuiz, setGeneratedQuiz] = useState<GeneratedQuiz | null>(initialQuiz || null);
   const [isGenerating, setIsGenerating] = useState(false);
 
   const processFile = async (file: File, fileId: string) => {

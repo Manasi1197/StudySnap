@@ -75,7 +75,7 @@ interface Participant {
   role: 'host' | 'moderator' | 'participant';
   joined_at: string;
   is_active: boolean;
-  user_profile: {
+  profiles: {
     full_name: string;
     avatar_url?: string;
   };
@@ -88,7 +88,7 @@ interface ChatMessage {
   message: string;
   message_type: 'text' | 'file' | 'quiz_share' | 'system';
   created_at: string;
-  user_profile: {
+  profiles: {
     full_name: string;
     avatar_url?: string;
   };
@@ -212,20 +212,34 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onBack }) => {
   const loadStudyRooms = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      
+      // First, fetch all study rooms
+      const { data: rooms, error: roomsError } = await supabase
         .from('study_rooms')
-        .select(`
-          *,
-          room_participants(count)
-        `)
+        .select('*')
         .eq('status', 'active')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (roomsError) throw roomsError;
 
-      const roomsWithCounts = data?.map(room => ({
+      // Then, fetch all active room participants
+      const { data: participants, error: participantsError } = await supabase
+        .from('room_participants')
+        .select('room_id')
+        .eq('is_active', true);
+
+      if (participantsError) throw participantsError;
+
+      // Count participants for each room
+      const participantCounts: { [key: string]: number } = {};
+      participants?.forEach(p => {
+        participantCounts[p.room_id] = (participantCounts[p.room_id] || 0) + 1;
+      });
+
+      // Combine rooms with participant counts
+      const roomsWithCounts = rooms?.map(room => ({
         ...room,
-        current_participants: room.room_participants?.[0]?.count || 0
+        current_participants: participantCounts[room.id] || 0
       })) || [];
 
       setStudyRooms(roomsWithCounts);
@@ -254,13 +268,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onBack }) => {
         .eq('is_active', true);
 
       if (error) throw error;
-
-      const participantsWithProfiles = data?.map(p => ({
-        ...p,
-        user_profile: p.profiles
-      })) || [];
-
-      setParticipants(participantsWithProfiles);
+      setParticipants(data || []);
     } catch (error) {
       console.error('Error loading participants:', error);
     }
@@ -284,13 +292,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onBack }) => {
         .limit(100);
 
       if (error) throw error;
-
-      const messagesWithProfiles = data?.map(m => ({
-        ...m,
-        user_profile: m.profiles
-      })) || [];
-
-      setChatMessages(messagesWithProfiles);
+      setChatMessages(data || []);
     } catch (error) {
       console.error('Error loading chat messages:', error);
     }
@@ -334,8 +336,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onBack }) => {
           ...roomData,
           created_by: user.id,
           room_code: roomCode,
-          status: 'active',
-          current_participants: 0
+          status: 'active'
         })
         .select()
         .single();
@@ -353,7 +354,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onBack }) => {
         });
 
       toast.success('Study room created successfully!');
-      setCurrentRoom(data);
+      setCurrentRoom({ ...data, current_participants: 1 });
       setCurrentView('room');
       setShowCreateModal(false);
     } catch (error) {
@@ -910,12 +911,12 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onBack }) => {
                     <div key={participant.id} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50">
                       <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
                         <span className="text-white text-sm font-medium">
-                          {participant.user_profile?.full_name?.charAt(0) || 'U'}
+                          {participant.profiles?.full_name?.charAt(0) || 'U'}
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">
-                          {participant.user_profile?.full_name || 'Unknown User'}
+                          {participant.profiles?.full_name || 'Unknown User'}
                         </p>
                         <div className="flex items-center space-x-2">
                           {participant.role === 'host' && (
@@ -959,7 +960,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onBack }) => {
                         }`}>
                           {message.user_id !== user?.id && (
                             <p className="text-xs font-medium mb-1 opacity-75">
-                              {message.user_profile?.full_name || 'Unknown User'}
+                              {message.profiles?.full_name || 'Unknown User'}
                             </p>
                           )}
                           <p className="text-sm">{message.message}</p>

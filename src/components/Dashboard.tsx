@@ -15,12 +15,10 @@ import {
   ArrowRight,
   Sparkles,
   Home,
-  Bookmark,
   GraduationCap,
   FileText,
   Award,
   Folder,
-  Calendar,
   HelpCircle,
   Settings,
   Moon,
@@ -37,6 +35,7 @@ import AudioPlayer from './AudioPlayer';
 import FlashcardsViewer from './FlashcardsViewer';
 import QuizTaker from './QuizTaker';
 import StudyRoom from './StudyRoom';
+import MaterialsManager from './MaterialsManager';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 
@@ -126,14 +125,11 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
 
   const sidebarItems = [
     { icon: Home, label: 'Home', page: 'dashboard' },
-    { icon: Bookmark, label: 'Bookmarks', page: 'bookmarks' },
     { icon: Brain, label: 'Quiz Generator', page: 'quiz-generator' },
     { icon: Users, label: 'Study Rooms', page: 'study-rooms' },
     { icon: FileText, label: 'Materials', page: 'materials' },
     { icon: Award, label: 'Achievements', page: 'achievements' },
     { icon: DollarSign, label: 'Marketplace', page: 'marketplace' },
-    { icon: Calendar, label: 'Schedule', page: 'schedule' },
-    { icon: MessageSquare, label: 'Community', page: 'community' },
   ];
 
   const bottomSidebarItems = [
@@ -283,9 +279,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
 
     switch (currentPage) {
       case 'study-rooms':
-        return (
-          <StudyRoom onNavigate={handleNavigation} />
-        );
+        return <StudyRoom onNavigate={handleNavigation} />;
+      case 'materials':
+        return <MaterialsManager onNavigate={handleNavigation} />;
       case 'marketplace':
         return (
           <div className="text-center pt-20">
@@ -293,39 +289,11 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
             <p className="text-xl text-gray-600">Monetize your study materials - feature in development!</p>
           </div>
         );
-      case 'bookmarks':
-        return (
-          <div className="text-center pt-20">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Bookmarks</h1>
-            <p className="text-xl text-gray-600">Your saved content and resources - coming soon!</p>
-          </div>
-        );
-      case 'materials':
-        return (
-          <div className="text-center pt-20">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Study Materials</h1>
-            <p className="text-xl text-gray-600">Organize and manage your learning resources - coming soon!</p>
-          </div>
-        );
       case 'achievements':
         return (
           <div className="text-center pt-20">
             <h1 className="text-4xl font-bold text-gray-900 mb-4">Achievements</h1>
             <p className="text-xl text-gray-600">Track your learning milestones and badges - coming soon!</p>
-          </div>
-        );
-      case 'schedule':
-        return (
-          <div className="text-center pt-20">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Study Schedule</h1>
-            <p className="text-xl text-gray-600">Plan and organize your study sessions - coming soon!</p>
-          </div>
-        );
-      case 'community':
-        return (
-          <div className="text-center pt-20">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Community</h1>
-            <p className="text-xl text-gray-600">Connect with fellow learners - coming soon!</p>
           </div>
         );
       case 'settings':
@@ -583,10 +551,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         )}
 
         {/* Dashboard Content */}
-        <main className={`flex-1 ${!isInSubPage && currentPage !== 'quiz-generator' && currentPage !== 'study-rooms' ? 'p-8' : ''}`}>
+        <main className={`flex-1 ${!isInSubPage && currentPage !== 'quiz-generator' && currentPage !== 'study-rooms' && currentPage !== 'materials' ? 'p-8' : ''}`}>
           {/* Conditional container width based on current page */}
-          {currentPage === 'quiz-generator' || isInSubPage || currentPage === 'study-rooms' ? (
-            // Full width for Quiz Generator, sub-pages, and Study Rooms
+          {currentPage === 'quiz-generator' || isInSubPage || currentPage === 'study-rooms' || currentPage === 'materials' ? (
+            // Full width for Quiz Generator, sub-pages, Study Rooms, and Materials
             <div className="w-full">
               {renderMainContent()}
             </div>
@@ -669,13 +637,13 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
                           <span className="font-medium text-gray-900">Join Study Room</span>
                         </button>
                         <button 
-                          onClick={() => handleNavigation('marketplace')}
+                          onClick={() => handleNavigation('materials')}
                           className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
                         >
                           <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-                            <DollarSign className="w-4 h-4 text-white" />
+                            <FileText className="w-4 h-4 text-white" />
                           </div>
-                          <span className="font-medium text-gray-900">Sell Materials</span>
+                          <span className="font-medium text-gray-900">Manage Materials</span>
                         </button>
                       </div>
                     </div>

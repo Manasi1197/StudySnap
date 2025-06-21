@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
   Upload, 
@@ -76,6 +76,22 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
     removeFile,
     reset: resetQuizGeneratorHook
   } = useQuizGenerator(initialGeneratedQuiz);
+
+  // Check for pre-filled content from Materials section
+  useEffect(() => {
+    const savedContent = localStorage.getItem('quiz_generator_content');
+    const savedTitle = localStorage.getItem('quiz_generator_title');
+    
+    if (savedContent && !textInput && uploadedFiles.length === 0) {
+      setTextInput(savedContent);
+      if (savedTitle) {
+        toast.success(savedTitle);
+      }
+      // Clear the stored content
+      localStorage.removeItem('quiz_generator_content');
+      localStorage.removeItem('quiz_generator_title');
+    }
+  }, [textInput, uploadedFiles.length, setTextInput]);
 
   // Calculate total content length for minimum word validation
   const getTotalContentLength = () => {

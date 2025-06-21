@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize, Download, BookOpen } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface VideoPlayerProps {
   title: string;
@@ -33,14 +34,39 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
-  const handleDownloadVideo = () => {
-    // Create a temporary anchor element to trigger download
-    const link = document.createElement('a');
-    link.href = videoUrl;
-    link.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadVideo = async () => {
+    try {
+      toast.loading('Preparing download...');
+      
+      // Fetch the video as a blob
+      const response = await fetch(videoUrl);
+      if (!response.ok) {
+        throw new Error('Failed to fetch video');
+      }
+      
+      const blob = await response.blob();
+      
+      // Create a blob URL
+      const blobUrl = window.URL.createObjectURL(blob);
+      
+      // Create a temporary anchor element to trigger download
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the blob URL
+      window.URL.revokeObjectURL(blobUrl);
+      
+      toast.dismiss();
+      toast.success('Video download started!');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.dismiss();
+      toast.error('Failed to download video. Please try again.');
+    }
   };
 
   return (

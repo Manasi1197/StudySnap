@@ -135,43 +135,43 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
         </div>
       </div>
 
-      {/* Flashcard Content */}
-      <div className="max-w-4xl mx-auto px-8 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Main Flashcard */}
-          <div className="lg:col-span-3">
+      {/* Flashcard Content - Full Width Layout */}
+      <div className="px-8 py-8">
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-8 max-w-full">
+          {/* Main Flashcard - Takes up more space */}
+          <div className="xl:col-span-4">
             <div className="perspective-1000">
               <div 
-                className={`relative w-full h-96 transform-style-preserve-3d transition-transform duration-700 cursor-pointer ${
+                className={`relative w-full h-[500px] transform-style-preserve-3d transition-transform duration-700 cursor-pointer ${
                   isFlipped ? 'rotate-y-180' : ''
                 }`}
                 onClick={flipCard}
               >
                 {/* Front of card */}
-                <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-2xl p-8 flex flex-col justify-center items-center text-white">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <BookOpen className="w-8 h-8 text-white" />
+                <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-2xl p-12 flex flex-col justify-center items-center text-white">
+                  <div className="text-center max-w-4xl">
+                    <div className="w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-8">
+                      <BookOpen className="w-10 h-10 text-white" />
                     </div>
-                    <h2 className="text-2xl font-bold mb-4">Question</h2>
-                    <p className="text-xl leading-relaxed">{currentCard?.front}</p>
+                    <h2 className="text-3xl font-bold mb-6">Question</h2>
+                    <p className="text-2xl leading-relaxed">{currentCard?.front}</p>
                   </div>
-                  <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2">
-                    <p className="text-white text-opacity-80 text-sm">Click to reveal answer</p>
+                  <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+                    <p className="text-white text-opacity-80 text-lg">Click to reveal answer</p>
                   </div>
                 </div>
 
                 {/* Back of card */}
-                <div className="absolute inset-0 backface-hidden rotate-y-180 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-2xl p-8 flex flex-col justify-center items-center text-white">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <BookOpen className="w-8 h-8 text-white" />
+                <div className="absolute inset-0 backface-hidden rotate-y-180 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-2xl p-12 flex flex-col justify-center items-center text-white">
+                  <div className="text-center max-w-4xl">
+                    <div className="w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-8">
+                      <BookOpen className="w-10 h-10 text-white" />
                     </div>
-                    <h2 className="text-2xl font-bold mb-4">Answer</h2>
-                    <p className="text-xl leading-relaxed">{currentCard?.back}</p>
+                    <h2 className="text-3xl font-bold mb-6">Answer</h2>
+                    <p className="text-2xl leading-relaxed">{currentCard?.back}</p>
                   </div>
-                  <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2">
-                    <p className="text-white text-opacity-80 text-sm">Click to flip back</p>
+                  <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+                    <p className="text-white text-opacity-80 text-lg">Click to flip back</p>
                   </div>
                 </div>
               </div>
@@ -182,14 +182,14 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
               <button
                 onClick={prevCard}
                 disabled={currentIndex === 0}
-                className="flex items-center space-x-2 px-6 py-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center space-x-2 px-8 py-4 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg font-medium"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-6 h-6" />
                 <span>Previous</span>
               </button>
 
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-500">
+              <div className="flex items-center space-x-6 bg-white rounded-xl px-8 py-4 border border-gray-200">
+                <span className="text-lg text-gray-500">
                   Topic: <span className="font-medium text-gray-900">{currentCard?.topic}</span>
                 </span>
               </div>
@@ -197,22 +197,22 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
               <button
                 onClick={nextCard}
                 disabled={currentIndex === flashcards.length - 1}
-                className="flex items-center space-x-2 px-6 py-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center space-x-2 px-8 py-4 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg font-medium"
               >
                 <span>Next</span>
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-6 h-6" />
               </button>
             </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
+          {/* Sidebar - Compact */}
+          <div className="xl:col-span-1 space-y-6">
             {/* Study Progress */}
             <div className="bg-white rounded-xl p-6 border border-gray-200">
-              <h3 className="font-bold text-gray-900 mb-4">Study Progress</h3>
+              <h3 className="font-bold text-gray-900 mb-4">Progress</h3>
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Total Cards:</span>
+                  <span className="text-gray-500">Total:</span>
                   <span className="font-medium text-gray-900">{flashcards.length}</span>
                 </div>
                 <div className="flex justify-between text-sm">
@@ -228,23 +228,23 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
 
             {/* Study Tips */}
             <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-100">
-              <h3 className="font-bold text-purple-900 mb-4">Study Tips</h3>
+              <h3 className="font-bold text-purple-900 mb-4">Tips</h3>
               <ul className="space-y-2 text-purple-800 text-sm">
                 <li className="flex items-start">
                   <span className="w-2 h-2 bg-purple-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                  Read the question carefully before flipping
+                  Read carefully before flipping
                 </li>
                 <li className="flex items-start">
                   <span className="w-2 h-2 bg-purple-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                  Try to answer before revealing the back
+                  Try to answer first
                 </li>
                 <li className="flex items-start">
                   <span className="w-2 h-2 bg-purple-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                  Review difficult cards multiple times
+                  Review difficult cards
                 </li>
                 <li className="flex items-start">
                   <span className="w-2 h-2 bg-purple-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                  Use shuffle to randomize your practice
+                  Use shuffle to randomize
                 </li>
               </ul>
             </div>

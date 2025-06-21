@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle, XCircle, AlertCircle, Trophy, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, XCircle, AlertCircle, Trophy, RotateCcw, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Question {
@@ -42,6 +42,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [showResults, setShowResults] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [showExitConfirmation, setShowExitConfirmation] = useState(false);
 
   // Early return if quiz data is invalid
   if (!quiz || !quiz.questions || !Array.isArray(quiz.questions) || quiz.questions.length === 0) {
@@ -51,6 +52,38 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
   const currentQuestion = quiz.questions[currentQuestionIndex];
   const totalQuestions = quiz.questions.length;
   const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
+
+  // Handle browser back button and page refresh
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!showResults && Object.keys(answers).length > 0) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved progress. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    const handlePopState = (e: PopStateEvent) => {
+      if (!showResults && Object.keys(answers).length > 0) {
+        e.preventDefault();
+        setShowExitConfirmation(true);
+        // Push the current state back to prevent navigation
+        window.history.pushState(null, '', window.location.href);
+      }
+    };
+
+    // Add event listeners
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+
+    // Push initial state to handle back button
+    window.history.pushState(null, '', window.location.href);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [showResults, answers]);
 
   const handleAnswerChange = (answer: any) => {
     setAnswers(prev => ({
@@ -117,6 +150,62 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
     setShowResults(false);
     setIsSubmitted(false);
   };
+
+  const handleBackClick = () => {
+    if (!showResults && Object.keys(answers).length > 0) {
+      setShowExitConfirmation(true);
+    } else {
+      onBack();
+    }
+  };
+
+  const confirmExit = () => {
+    setShowExitConfirmation(false);
+    onBack();
+  };
+
+  const cancelExit = () => {
+    setShowExitConfirmation(false);
+  };
+
+  // Exit Confirmation Modal
+  const ExitConfirmationModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-md relative">
+        <button
+          onClick={cancelExit}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-orange-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Leave Quiz?</h2>
+          <p className="text-gray-600">
+            You have unsaved progress. If you leave now, your answers will be lost. Are you sure you want to continue?
+          </p>
+        </div>
+
+        <div className="flex space-x-4">
+          <button
+            onClick={cancelExit}
+            className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+          >
+            Stay & Continue
+          </button>
+          <button
+            onClick={confirmExit}
+            className="flex-1 px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
+          >
+            Leave Quiz
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   if (showResults) {
     const score = calculateScore();
@@ -245,6 +334,9 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
             </div>
           </div>
         </div>
+
+        {/* Exit Confirmation Modal */}
+        {showExitConfirmation && <ExitConfirmationModal />}
       </div>
     );
   }
@@ -256,7 +348,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button
-              onClick={onBack}
+              onClick={handleBackClick}
               className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -395,6 +487,9 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
           </div>
         </div>
       </div>
+
+      {/* Exit Confirmation Modal */}
+      {showExitConfirmation && <ExitConfirmationModal />}
     </div>
   );
 };

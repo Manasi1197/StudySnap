@@ -33,14 +33,14 @@ import {
 } from 'lucide-react';
 import { useQuizGenerator } from '../hooks/useQuizGenerator';
 import { generateVideoWithTavus } from '../lib/tavus';
-import VideoPlayer from './VideoPlayer';
-import FlashcardsViewer from './FlashcardsViewer';
-import QuizTaker from './QuizTaker';
 import toast from 'react-hot-toast';
 
-const QuizGenerator: React.FC = () => {
+interface QuizGeneratorProps {
+  onNavigate?: (page: string, data?: any) => void;
+}
+
+const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate }) => {
   const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'review'>('upload');
-  const [activeSubView, setActiveSubView] = useState<'none' | 'video' | 'flashcards' | 'take-quiz'>('none');
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [showSettings, setShowSettings] = useState(false);
   const [showNewQuizConfirmation, setShowNewQuizConfirmation] = useState(false);
@@ -135,7 +135,13 @@ const QuizGenerator: React.FC = () => {
 
     if (generatedVideoUrl) {
       // Navigate to video page with existing video
-      setActiveSubView('video');
+      if (onNavigate) {
+        onNavigate('video-player', {
+          title: generatedQuiz.title,
+          description: generatedQuiz.description,
+          videoUrl: generatedVideoUrl
+        });
+      }
       return;
     }
 
@@ -147,7 +153,15 @@ const QuizGenerator: React.FC = () => {
         generatedQuiz.description
       );
       setGeneratedVideoUrl(videoUrl);
-      setActiveSubView('video');
+      
+      if (onNavigate) {
+        onNavigate('video-player', {
+          title: generatedQuiz.title,
+          description: generatedQuiz.description,
+          videoUrl: videoUrl
+        });
+      }
+      
       toast.success('AI video generated successfully!');
     } catch (error) {
       console.error('Video generation error:', error);
@@ -159,24 +173,21 @@ const QuizGenerator: React.FC = () => {
 
   // Navigate to flashcards page
   const handleNavigateToFlashcards = () => {
-    if (!generatedQuiz) return;
-    setActiveSubView('flashcards');
+    if (!generatedQuiz || !onNavigate) return;
+    
+    onNavigate('flashcards', {
+      title: generatedQuiz.title,
+      flashcards: generatedQuiz.flashcards
+    });
   };
 
   // Navigate to quiz taking page
   const handleStartQuiz = () => {
-    if (!generatedQuiz) return;
-    setActiveSubView('take-quiz');
-  };
-
-  // Handle back from sub-views
-  const handleBackToOverview = () => {
-    setActiveSubView('none');
-  };
-
-  // Handle navigation between sub-views
-  const handleSubViewNavigation = (targetView: 'video' | 'flashcards' | 'take-quiz') => {
-    setActiveSubView(targetView);
+    if (!generatedQuiz || !onNavigate) return;
+    
+    onNavigate('take-quiz', {
+      quiz: generatedQuiz
+    });
   };
 
   const translateContent = async (targetLanguage: string) => {
@@ -193,7 +204,6 @@ const QuizGenerator: React.FC = () => {
 
   const resetGenerator = () => {
     setCurrentStep('upload');
-    setActiveSubView('none');
     setGeneratedVideoUrl(null);
     reset();
   };
@@ -237,44 +247,9 @@ const QuizGenerator: React.FC = () => {
     </div>
   );
 
-  // Render sub-views
-  if (currentStep === 'review' && generatedQuiz && activeSubView !== 'none') {
-    switch (activeSubView) {
-      case 'video':
-        return (
-          <VideoPlayer
-            title={generatedQuiz.title}
-            description={generatedQuiz.description}
-            videoUrl={generatedVideoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'}
-            onBack={handleBackToOverview}
-            onNavigate={handleSubViewNavigation}
-            quizData={generatedQuiz}
-          />
-        );
-      case 'flashcards':
-        return (
-          <FlashcardsViewer
-            title={generatedQuiz.title}
-            flashcards={generatedQuiz.flashcards}
-            onBack={handleBackToOverview}
-            onNavigate={handleSubViewNavigation}
-            quizData={generatedQuiz}
-          />
-        );
-      case 'take-quiz':
-        return (
-          <QuizTaker
-            quiz={generatedQuiz}
-            onBack={handleBackToOverview}
-            onNavigate={handleSubViewNavigation}
-          />
-        );
-    }
-  }
-
   if (currentStep === 'processing') {
     return (
-      <div className="flex items-center justify-center h-96">
+      <div className="p-8 flex items-center justify-center h-96">
         <div className="text-center">
           <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mb-6 mx-auto">
             <Brain className="w-8 h-8 text-white animate-pulse" />

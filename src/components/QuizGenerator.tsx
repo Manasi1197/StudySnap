@@ -374,8 +374,8 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
               </div>
             </div>
             
-            <div className="mb-6 flex-grow">
-              <p className="text-gray-700 text-sm leading-relaxed">
+            <div className="mb-6 flex-grow flex items-center justify-center">
+              <p className="text-gray-700 text-sm leading-relaxed text-center">
                 {generatedQuiz.questions.length} questions • ~{generatedQuiz.estimatedTime} min
               </p>
             </div>

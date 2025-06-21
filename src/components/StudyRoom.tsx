@@ -135,13 +135,15 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   
-  // Whiteboard states
+  // Enhanced whiteboard states
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line' | 'rectangle' | 'circle' | 'text'>('pen');
   const [currentColor, setCurrentColor] = useState('#000000');
   const [currentWidth, setCurrentWidth] = useState(2);
   const [strokes, setStrokes] = useState<WhiteboardStroke[]>([]);
+  const [startPoint, setStartPoint] = useState<{x: number, y: number} | null>(null);
+  const [tempCanvas, setTempCanvas] = useState<HTMLCanvasElement | null>(null);
   
   // Pomodoro states
   const [pomodoroSession, setPomodoroSession] = useState<PomodoroSession>({
@@ -178,6 +180,31 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       return () => clearInterval(interval);
     }
   }, [currentRoom, user]);
+
+  // Initialize canvas when component mounts
+  useEffect(() => {
+    if (canvasRef.current) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Set canvas size
+        canvas.width = 800;
+        canvas.height = 600;
+        
+        // Set default drawing properties
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Create temporary canvas for shape preview
+        const tempCanv = document.createElement('canvas');
+        tempCanv.width = canvas.width;
+        tempCanv.height = canvas.height;
+        setTempCanvas(tempCanv);
+      }
+    }
+  }, [currentView]);
 
   // Pomodoro timer effect
   useEffect(() => {
@@ -310,7 +337,8 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
       setSharedContent((contentData || []).map(c => ({
         ...c,
-        user_name: c.profiles?.full_name || 'Unknown'
+        user_name: c.profiles?.full_name || 'Unknown',
+        title: c.content_type === 'quiz' ? 'Shared Quiz' : 'Study Material'
       })));
 
     } catch (error: any) {
@@ -529,7 +557,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         .insert({
           room_id: currentRoom.id,
           user_id: user.id,
-          message: `Shared a quiz: ${quizData.title || 'Demo Quiz'}`,
+          message: `📝 Shared a quiz: ${quizData.title || 'Demo Quiz'}`,
           message_type: 'quiz_share'
         });
 
@@ -566,7 +594,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         .insert({
           room_id: currentRoom.id,
           user_id: user.id,
-          message: `Shared a resource: ${resourceData.title || 'Study Material'}`,
+          message: `📚 Shared a resource: ${resourceData.title || 'Study Material'}`,
           message_type: 'file'
         });
 
@@ -579,43 +607,110 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     }
   };
 
-  // Whiteboard functions
+  // Enhanced whiteboard functions
+  const getMousePos = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return { x: 0, y: 0 };
+    
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
+    };
+  };
+
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) return;
     
+    const pos = getMousePos(e);
     setIsDrawing(true);
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    setStartPoint(pos);
     
+    const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    if (ctx) {
+    if (!ctx) return;
+
+    ctx.strokeStyle = currentTool === 'eraser' ? '#FFFFFF' : currentColor;
+    ctx.lineWidth = currentTool === 'eraser' ? currentWidth * 3 : currentWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (currentTool === 'pen' || currentTool === 'eraser') {
       ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.strokeStyle = currentColor;
-      ctx.lineWidth = currentWidth;
-      ctx.lineCap = 'round';
+      ctx.moveTo(pos.x, pos.y);
     }
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !canvasRef.current) return;
+    if (!isDrawing || !canvasRef.current || !startPoint) return;
     
+    const pos = getMousePos(e);
     const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
     const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.lineTo(x, y);
+    if (!ctx) return;
+
+    if (currentTool === 'pen' || currentTool === 'eraser') {
+      ctx.lineTo(pos.x, pos.y);
       ctx.stroke();
+    } else if (tempCanvas) {
+      // For shapes, draw on temporary canvas first
+      const tempCtx = tempCanvas.getContext('2d');
+      if (!tempCtx) return;
+
+      // Clear temp canvas
+      tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+      
+      // Copy main canvas to temp canvas
+      tempCtx.drawImage(canvas, 0, 0);
+      
+      // Draw shape on temp canvas
+      tempCtx.strokeStyle = currentColor;
+      tempCtx.lineWidth = currentWidth;
+      tempCtx.lineCap = 'round';
+      tempCtx.lineJoin = 'round';
+
+      const width = pos.x - startPoint.x;
+      const height = pos.y - startPoint.y;
+
+      tempCtx.beginPath();
+      
+      switch (currentTool) {
+        case 'line':
+          tempCtx.moveTo(startPoint.x, startPoint.y);
+          tempCtx.lineTo(pos.x, pos.y);
+          break;
+        case 'rectangle':
+          tempCtx.rect(startPoint.x, startPoint.y, width, height);
+          break;
+        case 'circle':
+          const radius = Math.sqrt(width * width + height * height);
+          tempCtx.arc(startPoint.x, startPoint.y, radius, 0, 2 * Math.PI);
+          break;
+      }
+      
+      tempCtx.stroke();
+      
+      // Clear main canvas and draw temp canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(tempCanvas, 0, 0);
     }
   };
 
   const stopDrawing = () => {
+    if (!isDrawing) return;
+    
     setIsDrawing(false);
+    setStartPoint(null);
+    
+    // Save the current state for undo functionality
+    if (canvasRef.current) {
+      const canvas = canvasRef.current;
+      const imageData = canvas.toDataURL();
+      // You could save this to strokes state for undo functionality
+    }
   };
 
   const clearWhiteboard = () => {
@@ -624,9 +719,22 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     setStrokes([]);
+    toast.success('Whiteboard cleared');
+  };
+
+  const downloadWhiteboard = () => {
+    if (!canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const link = document.createElement('a');
+    link.download = `whiteboard-${Date.now()}.png`;
+    link.href = canvas.toDataURL();
+    link.click();
+    toast.success('Whiteboard downloaded');
   };
 
   // Pomodoro functions
@@ -751,76 +859,113 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               <div className="border-b border-gray-200 p-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-medium text-gray-900">Collaborative Whiteboard</h3>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-4">
                     {/* Drawing Tools */}
                     <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
                       <button
                         onClick={() => setCurrentTool('pen')}
-                        className={`p-2 rounded ${currentTool === 'pen' ? 'bg-white shadow' : ''}`}
+                        className={`p-2 rounded transition-colors ${
+                          currentTool === 'pen' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                        title="Pen"
                       >
                         <Edit3 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setCurrentTool('eraser')}
-                        className={`p-2 rounded ${currentTool === 'eraser' ? 'bg-white shadow' : ''}`}
+                        className={`p-2 rounded transition-colors ${
+                          currentTool === 'eraser' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                        title="Eraser"
                       >
                         <Eraser className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setCurrentTool('line')}
-                        className={`p-2 rounded ${currentTool === 'line' ? 'bg-white shadow' : ''}`}
+                        className={`p-2 rounded transition-colors ${
+                          currentTool === 'line' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                        title="Line"
                       >
                         <Minus className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setCurrentTool('rectangle')}
-                        className={`p-2 rounded ${currentTool === 'rectangle' ? 'bg-white shadow' : ''}`}
+                        className={`p-2 rounded transition-colors ${
+                          currentTool === 'rectangle' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                        title="Rectangle"
                       >
                         <Square className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setCurrentTool('circle')}
-                        className={`p-2 rounded ${currentTool === 'circle' ? 'bg-white shadow' : ''}`}
+                        className={`p-2 rounded transition-colors ${
+                          currentTool === 'circle' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                        title="Circle"
                       >
                         <Circle className="w-4 h-4" />
                       </button>
                     </div>
                     
-                    {/* Color Picker */}
-                    <input
-                      type="color"
-                      value={currentColor}
-                      onChange={(e) => setCurrentColor(e.target.value)}
-                      className="w-8 h-8 rounded border border-gray-300"
-                    />
+                    {/* Color and Size Controls */}
+                    <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2">
+                        <label className="text-sm text-gray-600">Color:</label>
+                        <input
+                          type="color"
+                          value={currentColor}
+                          onChange={(e) => setCurrentColor(e.target.value)}
+                          className="w-8 h-8 rounded border border-gray-300 cursor-pointer"
+                          disabled={currentTool === 'eraser'}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <label className="text-sm text-gray-600">Size:</label>
+                        <input
+                          type="range"
+                          min="1"
+                          max="20"
+                          value={currentWidth}
+                          onChange={(e) => setCurrentWidth(parseInt(e.target.value))}
+                          className="w-20"
+                        />
+                        <span className="text-sm text-gray-600 w-6">{currentWidth}</span>
+                      </div>
+                    </div>
                     
-                    {/* Brush Size */}
-                    <input
-                      type="range"
-                      min="1"
-                      max="20"
-                      value={currentWidth}
-                      onChange={(e) => setCurrentWidth(parseInt(e.target.value))}
-                      className="w-20"
-                    />
-                    
-                    <button
-                      onClick={clearWhiteboard}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                    </button>
+                    {/* Action Buttons */}
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={clearWhiteboard}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Clear Whiteboard"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={downloadWhiteboard}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Download Whiteboard"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
               
               {/* Canvas */}
-              <div className="flex-1 relative">
+              <div className="flex-1 relative bg-white">
                 <canvas
                   ref={canvasRef}
-                  width={800}
-                  height={600}
-                  className="w-full h-full cursor-crosshair"
+                  className="w-full h-full border-0 cursor-crosshair"
+                  style={{ 
+                    cursor: currentTool === 'eraser' ? 'grab' : 'crosshair',
+                    touchAction: 'none'
+                  }}
                   onMouseDown={startDrawing}
                   onMouseMove={draw}
                   onMouseUp={stopDrawing}
@@ -882,6 +1027,9 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                   </button>
                 </div>
               </div>
+              <div className="mt-3 text-xs text-gray-500 text-center">
+                <p><strong>Pomodoro Technique:</strong> Work for 25 minutes, then take a 5-minute break. This helps maintain focus and productivity during study sessions.</p>
+              </div>
             </div>
 
             {/* Shared Content */}
@@ -907,15 +1055,29 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               </div>
               <div className="space-y-2 max-h-32 overflow-y-auto">
                 {sharedContent.map(content => (
-                  <div key={content.id} className="p-2 bg-gray-50 rounded text-sm">
-                    <div className="font-medium text-gray-900">
-                      {content.content_type === 'quiz' ? '🧠 Quiz' : '📄 Resource'}
+                  <div key={content.id} className="p-3 bg-gray-50 rounded-lg text-sm border border-gray-100">
+                    <div className="flex items-center space-x-2 mb-1">
+                      {content.content_type === 'quiz' ? (
+                        <Brain className="w-4 h-4 text-blue-600" />
+                      ) : (
+                        <FileText className="w-4 h-4 text-green-600" />
+                      )}
+                      <span className="font-medium text-gray-900">
+                        {content.title || (content.content_type === 'quiz' ? 'Shared Quiz' : 'Study Material')}
+                      </span>
                     </div>
                     <div className="text-gray-600">Shared by {content.user_name}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {new Date(content.shared_at).toLocaleTimeString()}
+                    </div>
                   </div>
                 ))}
                 {sharedContent.length === 0 && (
-                  <p className="text-sm text-gray-500">No content shared yet</p>
+                  <div className="text-center py-4">
+                    <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No content shared yet</p>
+                    <p className="text-xs text-gray-400">Share quizzes and resources to help your study group</p>
+                  </div>
                 )}
               </div>
             </div>
@@ -930,15 +1092,21 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {messages.map(message => (
                   <div key={message.id} className="text-sm">
-                    <div className="font-medium text-gray-900">{message.user_name}</div>
-                    <div className="text-gray-700">{message.message}</div>
-                    <div className="text-xs text-gray-500">
-                      {new Date(message.created_at).toLocaleTimeString()}
+                    <div className="flex items-center space-x-2 mb-1">
+                      <span className="font-medium text-gray-900">{message.user_name}</span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(message.created_at).toLocaleTimeString()}
+                      </span>
                     </div>
+                    <div className="text-gray-700 break-words">{message.message}</div>
                   </div>
                 ))}
                 {messages.length === 0 && (
-                  <p className="text-sm text-gray-500">No messages yet. Start the conversation!</p>
+                  <div className="text-center py-8">
+                    <MessageSquare className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No messages yet</p>
+                    <p className="text-xs text-gray-400">Start the conversation!</p>
+                  </div>
                 )}
               </div>
               
@@ -981,17 +1149,33 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               </div>
               
               <div className="space-y-4">
-                <div className="p-4 border border-gray-200 rounded-lg">
-                  <h4 className="font-medium text-gray-900">Demo Quiz</h4>
-                  <p className="text-sm text-gray-600">Sample quiz for demonstration</p>
+                <div className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <Brain className="w-6 h-6 text-blue-600" />
+                    <h4 className="font-medium text-gray-900">Demo Quiz</h4>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">Sample quiz for demonstration purposes</p>
                   <button
                     onClick={() => shareQuiz({ title: 'Demo Quiz' })}
-                    className="mt-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                    className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                   >
                     Share This Quiz
                   </button>
                 </div>
-                <p className="text-sm text-gray-500">
+                <div className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <Brain className="w-6 h-6 text-green-600" />
+                    <h4 className="font-medium text-gray-900">Biology Quiz</h4>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">Cell structure and function quiz</p>
+                  <button
+                    onClick={() => shareQuiz({ title: 'Biology Quiz' })}
+                    className="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                  >
+                    Share This Quiz
+                  </button>
+                </div>
+                <p className="text-sm text-gray-500 text-center">
                   More quizzes will appear here when you create them in the Quiz Generator.
                 </p>
               </div>
@@ -1014,17 +1198,33 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               </div>
               
               <div className="space-y-4">
-                <div className="p-4 border border-gray-200 rounded-lg">
-                  <h4 className="font-medium text-gray-900">Study Notes</h4>
-                  <p className="text-sm text-gray-600">Sample study material</p>
+                <div className="p-4 border border-gray-200 rounded-lg hover:border-green-300 transition-colors">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <FileText className="w-6 h-6 text-green-600" />
+                    <h4 className="font-medium text-gray-900">Study Notes</h4>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">Comprehensive study material and notes</p>
                   <button
                     onClick={() => addResource({ title: 'Study Notes' })}
-                    className="mt-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                    className="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
                   >
                     Share This Resource
                   </button>
                 </div>
-                <p className="text-sm text-gray-500">
+                <div className="p-4 border border-gray-200 rounded-lg hover:border-green-300 transition-colors">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <BookOpen className="w-6 h-6 text-blue-600" />
+                    <h4 className="font-medium text-gray-900">Reference Material</h4>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">Additional reading and reference documents</p>
+                  <button
+                    onClick={() => addResource({ title: 'Reference Material' })}
+                    className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                  >
+                    Share This Resource
+                  </button>
+                </div>
+                <p className="text-sm text-gray-500 text-center">
                   Upload and share your study materials with the room.
                 </p>
               </div>

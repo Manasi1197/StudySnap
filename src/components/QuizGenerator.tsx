@@ -31,11 +31,54 @@ import {
   File,
   RotateCw,
   Award,
-  X
+  X,
+  AlertTriangle,
+  Info
 } from 'lucide-react';
 import { useQuizGenerator } from '../hooks/useQuizGenerator';
 import { isPDFFile } from '../lib/pdfExtractor';
 import toast from 'react-hot-toast';
+
+// Confirmation Modal Component
+const ConfirmationModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+}> = ({ isOpen, onClose, onConfirm, title, message, confirmText = "Confirm", cancelText = "Cancel" }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-md">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+            <AlertTriangle className="w-6 h-6 text-orange-600" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900">{title}</h3>
+        </div>
+        <p className="text-gray-600 mb-8 leading-relaxed">{message}</p>
+        <div className="flex space-x-4">
+          <button
+            onClick={onClose}
+            className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const QuizGenerator: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'review' | 'flashcards' | 'quiz' | 'results'>('upload');
@@ -45,6 +88,7 @@ const QuizGenerator: React.FC = () => {
   const [userAnswers, setUserAnswers] = useState<Record<string, any>>({});
   const [quizStartTime, setQuizStartTime] = useState<Date | null>(null);
   const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set());
+  const [showNewQuizConfirmation, setShowNewQuizConfirmation] = useState(false);
   const [quizSettings, setQuizSettings] = useState({
     questionCount: 10,
     difficulty: 'mixed',
@@ -155,7 +199,17 @@ const QuizGenerator: React.FC = () => {
   };
 
   const nextQuestion = () => {
-    if (generatedQuiz && currentQuestionIndex < generatedQuiz.questions.length - 1) {
+    if (!generatedQuiz) return;
+    
+    const currentQuestion = generatedQuiz.questions[currentQuestionIndex];
+    const hasAnswer = userAnswers[currentQuestion.id] !== undefined && userAnswers[currentQuestion.id] !== '';
+    
+    if (!hasAnswer) {
+      toast.error('Please answer the current question before proceeding');
+      return;
+    }
+
+    if (currentQuestionIndex < generatedQuiz.questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     }
   };
@@ -168,6 +222,16 @@ const QuizGenerator: React.FC = () => {
 
   const submitQuiz = () => {
     if (!generatedQuiz) return;
+
+    // Check if all questions are answered
+    const unansweredQuestions = generatedQuiz.questions.filter(q => 
+      userAnswers[q.id] === undefined || userAnswers[q.id] === ''
+    );
+
+    if (unansweredQuestions.length > 0) {
+      toast.error(`Please answer all questions before submitting (${unansweredQuestions.length} remaining)`);
+      return;
+    }
 
     const timeSpent = quizStartTime ? Math.floor((new Date().getTime() - quizStartTime.getTime()) / 1000) : 0;
     setCurrentStep('results');
@@ -186,9 +250,11 @@ const QuizGenerator: React.FC = () => {
           if (userAnswer === question.correctAnswer) correct++;
         } else if (question.type === 'true-false') {
           if (userAnswer === question.correctAnswer) correct++;
-        } else if (question.type === 'fill-blank' || question.type === 'short-answer') {
-          // Simple string comparison for now
-          if (userAnswer.toLowerCase().trim() === question.correctAnswer.toLowerCase().trim()) {
+        } else if (question.type === 'fill-blank') {
+          // More flexible matching for fill-in-the-blank
+          const userAnswerStr = userAnswer.toLowerCase().trim();
+          const correctAnswerStr = question.correctAnswer.toLowerCase().trim();
+          if (userAnswerStr === correctAnswerStr || userAnswerStr.includes(correctAnswerStr)) {
             correct++;
           }
         }
@@ -200,6 +266,19 @@ const QuizGenerator: React.FC = () => {
       total,
       percentage: Math.round((correct / total) * 100)
     };
+  };
+
+  const handleNewQuizClick = () => {
+    if (generatedQuiz || uploadedFiles.length > 0 || textInput.trim()) {
+      setShowNewQuizConfirmation(true);
+    } else {
+      resetGenerator();
+    }
+  };
+
+  const confirmNewQuiz = () => {
+    setShowNewQuizConfirmation(false);
+    resetGenerator();
   };
 
   const resetGenerator = () => {
@@ -233,6 +312,15 @@ const QuizGenerator: React.FC = () => {
     }
   };
 
+  // Generate Tavus video for the quiz topic
+  const generateTopicVideo = async () => {
+    if (!generatedQuiz) return;
+    
+    toast.success('Generating AI video explanation for this topic...');
+    // This would integrate with Tavus API to generate a video about the quiz topic
+    console.log('Generating Tavus video for topic:', generatedQuiz.title);
+  };
+
   if (currentStep === 'processing') {
     return (
       <div className="flex items-center justify-center h-96">
@@ -256,9 +344,12 @@ const QuizGenerator: React.FC = () => {
       const userAnswer = userAnswers[q.id];
       if (q.type === 'multiple-choice' || q.type === 'true-false') {
         return userAnswer !== q.correctAnswer;
-      } else {
-        return userAnswer?.toLowerCase().trim() !== q.correctAnswer.toLowerCase().trim();
+      } else if (q.type === 'fill-blank') {
+        const userAnswerStr = userAnswer?.toLowerCase().trim() || '';
+        const correctAnswerStr = q.correctAnswer.toLowerCase().trim();
+        return userAnswerStr !== correctAnswerStr && !userAnswerStr.includes(correctAnswerStr);
       }
+      return false;
     });
 
     return (
@@ -329,6 +420,22 @@ const QuizGenerator: React.FC = () => {
                         })}
                       </div>
                     )}
+                    {question.type === 'fill-blank' && (
+                      <div className="mb-4 space-y-2">
+                        <div className="flex items-center space-x-3">
+                          <span className="text-sm font-medium text-gray-600">Your answer:</span>
+                          <span className="px-3 py-1 bg-red-100 text-red-800 rounded-lg text-sm">
+                            {userAnswers[question.id] || 'No answer'}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <span className="text-sm font-medium text-gray-600">Correct answer:</span>
+                          <span className="px-3 py-1 bg-green-100 text-green-800 rounded-lg text-sm">
+                            {question.correctAnswer}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <h5 className="font-medium text-blue-900 mb-2">AI Explanation:</h5>
@@ -350,7 +457,7 @@ const QuizGenerator: React.FC = () => {
             <span>Back to Review</span>
           </button>
           <button
-            onClick={resetGenerator}
+            onClick={handleNewQuizClick}
             className="flex items-center space-x-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
           >
             <RotateCcw className="w-4 h-4" />
@@ -364,6 +471,7 @@ const QuizGenerator: React.FC = () => {
   if (currentStep === 'quiz' && generatedQuiz) {
     const currentQuestion = generatedQuiz.questions[currentQuestionIndex];
     const progress = ((currentQuestionIndex + 1) / generatedQuiz.questions.length) * 100;
+    const hasAnswer = userAnswers[currentQuestion.id] !== undefined && userAnswers[currentQuestion.id] !== '';
 
     return (
       <div className="max-w-3xl mx-auto space-y-8">
@@ -397,6 +505,9 @@ const QuizGenerator: React.FC = () => {
               </span>
               <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-medium">
                 {currentQuestion.difficulty.toUpperCase()}
+              </span>
+              <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-xs font-medium">
+                REQUIRED
               </span>
             </div>
             <h3 className="text-2xl font-medium text-gray-900 leading-relaxed">
@@ -460,18 +571,33 @@ const QuizGenerator: React.FC = () => {
               </div>
             )}
 
-            {(currentQuestion.type === 'fill-blank' || currentQuestion.type === 'short-answer') && (
+            {currentQuestion.type === 'fill-blank' && (
               <div>
-                <textarea
+                <input
+                  type="text"
                   value={userAnswers[currentQuestion.id] || ''}
                   onChange={(e) => handleAnswerSelect(currentQuestion.id, e.target.value)}
                   placeholder="Type your answer here..."
-                  className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none resize-none"
-                  rows={3}
+                  className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none text-lg"
                 />
+                <p className="text-sm text-gray-500 mt-2">
+                  Hint: Provide a concise, one-word or short phrase answer
+                </p>
               </div>
             )}
           </div>
+
+          {/* Answer Status */}
+          {!hasAnswer && (
+            <div className="mt-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="w-5 h-5 text-orange-600" />
+                <p className="text-orange-800 text-sm">
+                  Please answer this question before proceeding. All questions are required.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
@@ -496,7 +622,11 @@ const QuizGenerator: React.FC = () => {
           ) : (
             <button
               onClick={nextQuestion}
-              className="flex items-center space-x-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+              className={`flex items-center space-x-2 px-6 py-3 rounded-lg transition-colors ${
+                hasAnswer 
+                  ? 'bg-purple-500 text-white hover:bg-purple-600' 
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
             >
               <span>Next</span>
               <ArrowRight className="w-4 h-4" />
@@ -591,7 +721,7 @@ const QuizGenerator: React.FC = () => {
           </div>
           <div className="flex items-center space-x-3">
             <button
-              onClick={resetGenerator}
+              onClick={handleNewQuizClick}
               className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -641,7 +771,30 @@ const QuizGenerator: React.FC = () => {
         </div>
 
         {/* Action Cards */}
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-3 gap-6">
+          {/* AI Video Card */}
+          <div className="bg-gradient-to-br from-red-50 to-orange-100 rounded-xl p-8 border border-red-200">
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="w-12 h-12 bg-red-500 rounded-xl flex items-center justify-center">
+                <Video className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">AI Video</h3>
+                <p className="text-gray-600">Watch AI-generated explanation</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Topic overview video</span>
+              <button
+                onClick={generateTopicVideo}
+                className="flex items-center space-x-2 px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+              >
+                <Video className="w-4 h-4" />
+                <span>Generate</span>
+              </button>
+            </div>
+          </div>
+
           {/* Flashcards Card */}
           {generatedQuiz.flashcards.length > 0 && (
             <div className="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl p-8 border border-blue-200">
@@ -651,7 +804,7 @@ const QuizGenerator: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-gray-900">Study Flashcards</h3>
-                  <p className="text-gray-600">Review key concepts before taking the quiz</p>
+                  <p className="text-gray-600">Review key concepts first</p>
                 </div>
               </div>
               <div className="flex items-center justify-between">
@@ -675,7 +828,7 @@ const QuizGenerator: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-xl font-bold text-gray-900">Take Quiz</h3>
-                <p className="text-gray-600">Test your knowledge with interactive questions</p>
+                <p className="text-gray-600">Test your knowledge</p>
               </div>
             </div>
             <div className="flex items-center justify-between">
@@ -691,35 +844,73 @@ const QuizGenerator: React.FC = () => {
           </div>
         </div>
 
-        {/* Quiz Overview */}
+        {/* Quiz Guidelines */}
         <div className="bg-white rounded-xl border border-gray-200">
           <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-bold text-gray-900">Quiz Overview</h3>
-            <p className="text-gray-600">Your quiz contains {generatedQuiz.questions.length} questions across different topics</p>
+            <h3 className="text-lg font-bold text-gray-900">Quiz Guidelines</h3>
+            <p className="text-gray-600">Important information before you start</p>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {generatedQuiz.questions.slice(0, 6).map((question, index) => (
-                <div key={question.id} className="border border-gray-100 rounded-lg p-4">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <span className="bg-purple-100 text-purple-600 px-2 py-1 rounded text-xs font-medium">
-                      Q{index + 1}
-                    </span>
-                    <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium">
-                      {question.type.replace('-', ' ').toUpperCase()}
-                    </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="flex items-start space-x-3">
+                  <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
                   </div>
-                  <p className="text-sm text-gray-700 line-clamp-2">{question.question}</p>
+                  <div>
+                    <h4 className="font-medium text-gray-900">All Questions Required</h4>
+                    <p className="text-sm text-gray-600">You must answer every question to proceed. No negative marking.</p>
+                  </div>
                 </div>
-              ))}
-            </div>
-            {generatedQuiz.questions.length > 6 && (
-              <div className="text-center mt-4">
-                <p className="text-gray-500 text-sm">
-                  And {generatedQuiz.questions.length - 6} more questions...
-                </p>
+                <div className="flex items-start space-x-3">
+                  <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Clock className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Take Your Time</h4>
+                    <p className="text-sm text-gray-600">No time limit. Focus on understanding each question.</p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Brain className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">AI Explanations</h4>
+                    <p className="text-sm text-gray-600">Get detailed explanations for incorrect answers.</p>
+                  </div>
+                </div>
               </div>
-            )}
+              <div className="space-y-4">
+                <div className="flex items-start space-x-3">
+                  <div className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Target className="w-4 h-4 text-orange-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Question Types</h4>
+                    <p className="text-sm text-gray-600">Multiple choice, true/false, and fill-in-the-blank questions.</p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Info className="w-4 h-4 text-red-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Navigation</h4>
+                    <p className="text-sm text-gray-600">You can go back to previous questions to review or change answers.</p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Award className="w-4 h-4 text-green-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Scoring</h4>
+                    <p className="text-sm text-gray-600">Get instant results with percentage score and detailed feedback.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -794,8 +985,7 @@ const QuizGenerator: React.FC = () => {
                     {[
                       { id: 'multiple-choice', label: 'Multiple Choice' },
                       { id: 'true-false', label: 'True/False' },
-                      { id: 'fill-blank', label: 'Fill in the Blank' },
-                      { id: 'short-answer', label: 'Short Answer' }
+                      { id: 'fill-blank', label: 'Fill in the Blank' }
                     ].map(type => (
                       <label key={type.id} className="flex items-center">
                         <input
@@ -1005,7 +1195,7 @@ const QuizGenerator: React.FC = () => {
                   <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Target className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-gray-700">{quizSettings.questionCount} AI-generated questions</span>
+                  <span className="text-gray-700">{quizSettings.questionCount} focused questions</span>
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="w-10 h-10 bg-pink-500 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -1017,13 +1207,13 @@ const QuizGenerator: React.FC = () => {
                   <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Video className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-gray-700">AI explanations</span>
+                  <span className="text-gray-700">AI topic videos</span>
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Languages className="w-5 h-5 text-white" />
+                    <Brain className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-gray-700">Multi-language support</span>
+                  <span className="text-gray-700">Detailed explanations</span>
                 </div>
               </div>
             </div>
@@ -1053,6 +1243,17 @@ const QuizGenerator: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showNewQuizConfirmation}
+        onClose={() => setShowNewQuizConfirmation(false)}
+        onConfirm={confirmNewQuiz}
+        title="Create New Quiz?"
+        message="This will clear your current progress and uploaded files. Are you sure you want to start over?"
+        confirmText="Yes, Start Over"
+        cancelText="Cancel"
+      />
     </div>
   );
 };

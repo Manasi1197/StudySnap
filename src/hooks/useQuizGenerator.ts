@@ -24,7 +24,7 @@ export interface GeneratedQuiz {
   estimatedTime: number;
 }
 
-// Mock quiz data for testing without API calls
+// Enhanced mock quiz data with better question types
 const generateMockQuiz = (content: string, settings: any): GeneratedQuiz => {
   const topics = ['Biology', 'Chemistry', 'Physics', 'Mathematics', 'History', 'Literature'];
   const randomTopic = topics[Math.floor(Math.random() * topics.length)];
@@ -36,7 +36,7 @@ const generateMockQuiz = (content: string, settings: any): GeneratedQuiz => {
       question: 'What is the primary function of mitochondria in cells?',
       options: [
         'Protein synthesis',
-        'Energy production (ATP)',
+        'Energy production',
         'DNA replication',
         'Waste removal'
       ],
@@ -66,53 +66,20 @@ const generateMockQuiz = (content: string, settings: any): GeneratedQuiz => {
     {
       id: 'q4',
       type: 'multiple-choice',
-      question: 'Which of the following is NOT a component of DNA?',
+      question: 'Which element has the chemical symbol "Au"?',
       options: [
-        'Adenine',
-        'Guanine',
-        'Uracil',
-        'Cytosine'
-      ],
-      correctAnswer: 2,
-      explanation: 'Uracil is found in RNA, not DNA. DNA contains the bases adenine, guanine, cytosine, and thymine. In RNA, thymine is replaced by uracil.',
-      difficulty: 'medium',
-      topic: 'Genetics'
-    },
-    {
-      id: 'q5',
-      type: 'short-answer',
-      question: 'Explain the difference between mitosis and meiosis.',
-      correctAnswer: 'Mitosis produces two identical diploid cells for growth and repair, while meiosis produces four genetically different haploid gametes for reproduction.',
-      explanation: 'Mitosis is used for growth and repair, producing two identical diploid cells. Meiosis is used for sexual reproduction, producing four genetically diverse haploid gametes through crossing over and independent assortment.',
-      difficulty: 'hard',
-      topic: 'Cell Division'
-    },
-    {
-      id: 'q6',
-      type: 'true-false',
-      question: 'All living organisms are made up of cells.',
-      correctAnswer: true,
-      explanation: 'The cell theory states that all living things are composed of one or more cells, making this statement true. This is one of the fundamental principles of biology.',
-      difficulty: 'easy',
-      topic: 'Cell Theory'
-    },
-    {
-      id: 'q7',
-      type: 'multiple-choice',
-      question: 'What is the pH of pure water at 25°C?',
-      options: [
-        '6',
-        '7',
-        '8',
-        '14'
+        'Silver',
+        'Gold',
+        'Aluminum',
+        'Argon'
       ],
       correctAnswer: 1,
-      explanation: 'Pure water has a pH of 7 at 25°C, which is considered neutral. This means it has equal concentrations of hydrogen ions (H+) and hydroxide ions (OH-).',
-      difficulty: 'easy',
+      explanation: 'Gold has the chemical symbol "Au" which comes from the Latin word "aurum" meaning gold.',
+      difficulty: 'medium',
       topic: 'Chemistry'
     },
     {
-      id: 'q8',
+      id: 'q5',
       type: 'fill-blank',
       question: 'The powerhouse of the cell is the _______.',
       correctAnswer: 'mitochondria',
@@ -121,28 +88,112 @@ const generateMockQuiz = (content: string, settings: any): GeneratedQuiz => {
       topic: 'Cell Biology'
     },
     {
-      id: 'q9',
+      id: 'q6',
+      type: 'true-false',
+      question: 'Water boils at 100 degrees Celsius at sea level.',
+      correctAnswer: true,
+      explanation: 'At standard atmospheric pressure (sea level), water boils at exactly 100°C or 212°F.',
+      difficulty: 'easy',
+      topic: 'Physics'
+    },
+    {
+      id: 'q7',
       type: 'multiple-choice',
-      question: 'Which organelle is responsible for protein synthesis?',
+      question: 'What is the largest planet in our solar system?',
       options: [
-        'Nucleus',
-        'Ribosome',
-        'Golgi apparatus',
-        'Endoplasmic reticulum'
+        'Saturn',
+        'Jupiter',
+        'Neptune',
+        'Earth'
       ],
       correctAnswer: 1,
-      explanation: 'Ribosomes are the cellular structures responsible for protein synthesis. They read mRNA and translate the genetic code into amino acid sequences to form proteins.',
+      explanation: 'Jupiter is the largest planet in our solar system, with a mass greater than all other planets combined.',
+      difficulty: 'easy',
+      topic: 'Astronomy'
+    },
+    {
+      id: 'q8',
+      type: 'fill-blank',
+      question: 'The study of living organisms is called _______.',
+      correctAnswer: 'biology',
+      explanation: 'Biology is the scientific study of life and living organisms, including their structure, function, growth, evolution, and distribution.',
+      difficulty: 'easy',
+      topic: 'Science'
+    },
+    {
+      id: 'q9',
+      type: 'true-false',
+      question: 'The human brain uses approximately 20% of the body\'s total energy.',
+      correctAnswer: true,
+      explanation: 'Despite being only about 2% of body weight, the human brain consumes approximately 20% of the body\'s total energy, primarily in the form of glucose.',
       difficulty: 'medium',
-      topic: 'Cell Biology'
+      topic: 'Human Biology'
     },
     {
       id: 'q10',
+      type: 'multiple-choice',
+      question: 'Which gas makes up approximately 78% of Earth\'s atmosphere?',
+      options: [
+        'Oxygen',
+        'Nitrogen',
+        'Carbon dioxide',
+        'Argon'
+      ],
+      correctAnswer: 1,
+      explanation: 'Nitrogen makes up about 78% of Earth\'s atmosphere, while oxygen comprises about 21%, and the remaining 1% consists of other gases.',
+      difficulty: 'medium',
+      topic: 'Earth Science'
+    },
+    {
+      id: 'q11',
+      type: 'fill-blank',
+      question: 'The basic unit of heredity is the _______.',
+      correctAnswer: 'gene',
+      explanation: 'A gene is the basic physical and functional unit of heredity, made up of DNA sequences that code for specific traits.',
+      difficulty: 'medium',
+      topic: 'Genetics'
+    },
+    {
+      id: 'q12',
       type: 'true-false',
-      question: 'Enzymes are proteins that speed up chemical reactions.',
+      question: 'Light travels faster than sound.',
       correctAnswer: true,
-      explanation: 'Enzymes are biological catalysts, typically proteins, that speed up chemical reactions by lowering the activation energy required for the reaction to occur.',
+      explanation: 'Light travels at approximately 300,000 km/s in a vacuum, while sound travels at only about 343 m/s in air at room temperature.',
       difficulty: 'easy',
-      topic: 'Biochemistry'
+      topic: 'Physics'
+    },
+    {
+      id: 'q13',
+      type: 'multiple-choice',
+      question: 'What is the pH of pure water?',
+      options: [
+        '6',
+        '7',
+        '8',
+        '9'
+      ],
+      correctAnswer: 1,
+      explanation: 'Pure water has a pH of 7, which is considered neutral on the pH scale that ranges from 0 (acidic) to 14 (basic).',
+      difficulty: 'easy',
+      topic: 'Chemistry'
+    },
+    {
+      id: 'q14',
+      type: 'fill-blank',
+      question: 'The force that keeps planets in orbit around the sun is _______.',
+      correctAnswer: 'gravity',
+      explanation: 'Gravity is the fundamental force that attracts objects with mass toward each other, keeping planets in stable orbits around the sun.',
+      difficulty: 'medium',
+      topic: 'Physics'
+    },
+    {
+      id: 'q15',
+      type: 'true-false',
+      question: 'All living things are made up of cells.',
+      correctAnswer: true,
+      explanation: 'The cell theory states that all living things are composed of one or more cells, making this statement true. This is one of the fundamental principles of biology.',
+      difficulty: 'easy',
+      topic: 'Cell Theory'
     }
   ];
 
@@ -167,44 +218,61 @@ const generateMockQuiz = (content: string, settings: any): GeneratedQuiz => {
     },
     {
       id: 'f4',
-      front: 'DNA vs RNA',
-      back: 'DNA is double-stranded with thymine; RNA is single-stranded with uracil',
-      topic: 'Genetics'
+      front: 'Gravity',
+      back: 'The fundamental force that attracts objects with mass toward each other',
+      topic: 'Physics'
     },
     {
       id: 'f5',
-      front: 'Cell Theory',
-      back: 'All living things are made of cells; cells are the basic unit of life; all cells come from pre-existing cells',
-      topic: 'Cell Theory'
+      front: 'Gene',
+      back: 'The basic unit of heredity, made up of DNA sequences that code for traits',
+      topic: 'Genetics'
     },
     {
       id: 'f6',
-      front: 'Enzyme',
-      back: 'Protein that acts as a biological catalyst to speed up chemical reactions',
-      topic: 'Biochemistry'
-    },
-    {
-      id: 'f7',
-      front: 'Ribosome',
-      back: 'Cellular structure responsible for protein synthesis by translating mRNA',
-      topic: 'Cell Biology'
-    },
-    {
-      id: 'f8',
       front: 'pH Scale',
       back: 'Measures acidity/alkalinity from 0-14; 7 is neutral, <7 is acidic, >7 is basic',
       topic: 'Chemistry'
+    },
+    {
+      id: 'f7',
+      front: 'Cell Theory',
+      back: 'All living things are made of cells; cells are the basic unit of life; all cells come from pre-existing cells',
+      topic: 'Biology'
+    },
+    {
+      id: 'f8',
+      front: 'Jupiter',
+      back: 'The largest planet in our solar system, with a mass greater than all other planets combined',
+      topic: 'Astronomy'
+    },
+    {
+      id: 'f9',
+      front: 'Nitrogen',
+      back: 'The gas that makes up approximately 78% of Earth\'s atmosphere',
+      topic: 'Earth Science'
+    },
+    {
+      id: 'f10',
+      front: 'Brain Energy',
+      back: 'The human brain uses approximately 20% of the body\'s total energy despite being only 2% of body weight',
+      topic: 'Human Biology'
     }
   ];
 
+  // Filter questions based on selected types
+  const filteredQuestions = mockQuestions.filter(q => 
+    settings.questionTypes.includes(q.type)
+  );
+
   // Select questions based on settings
-  const selectedQuestions = mockQuestions.slice(0, settings.questionCount);
+  const selectedQuestions = filteredQuestions.slice(0, Math.min(settings.questionCount, filteredQuestions.length));
   const selectedFlashcards = settings.includeFlashcards ? mockFlashcards.slice(0, Math.min(8, settings.questionCount)) : [];
 
   return {
     id: Math.random().toString(36).substr(2, 9),
     title: `${randomTopic} Study Quiz`,
-    description: `A comprehensive quiz covering key concepts in ${randomTopic.toLowerCase()}. Test your understanding with ${selectedQuestions.length} carefully crafted questions.`,
+    description: `A comprehensive quiz covering key concepts in ${randomTopic.toLowerCase()}. Test your understanding with ${selectedQuestions.length} carefully crafted questions designed to reinforce learning.`,
     questions: selectedQuestions,
     flashcards: selectedFlashcards,
     createdAt: new Date(),
@@ -281,7 +349,7 @@ export function useQuizGenerator() {
         quiz = generateMockQuiz(allContent, settings);
         toast.success('Mock quiz generated successfully! (API calls disabled for testing)');
       } else {
-        // Use real AI generation
+        // Use real AI generation with improved prompt for better question types
         const request: GenerateQuizRequest = {
           content: allContent,
           questionCount: settings.questionCount,

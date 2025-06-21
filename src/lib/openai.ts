@@ -37,7 +37,7 @@ export interface GeneratedQuizResponse {
     type: string;
     question: string;
     options?: string[];
-    correctAnswer: string | number;
+    correctAnswer: string | number | boolean;
     explanation: string;
     difficulty: string;
     topic: string;
@@ -109,10 +109,18 @@ REQUIREMENTS:
 - Language: ${request.language}
 - ${request.includeFlashcards ? 'Include flashcards for key concepts' : 'No flashcards needed'}
 
+CRITICAL QUESTION GUIDELINES:
+1. For multiple-choice questions: Provide 4 clear, distinct options with only ONE correct answer
+2. For true-false questions: Create statements that are definitively true or false
+3. For fill-in-the-blank questions: Design questions where the answer is a single word or short phrase (2-3 words maximum)
+4. NO questions requiring long sentence answers or essays
+5. Focus on factual knowledge, definitions, and key concepts
+6. Ensure answers are unambiguous and can be clearly verified
+
 Create questions that:
-1. Test deep understanding, not just memorization
+1. Test understanding of key concepts and facts
 2. Are clearly written and unambiguous
-3. Have educational value and promote learning
+3. Have definitive, verifiable answers
 4. Cover the most important concepts from the content
 5. Include detailed explanations that help students learn
 
@@ -123,10 +131,10 @@ Please respond with a JSON object in this exact format:
   "questions": [
     {
       "id": "q1",
-      "type": "multiple-choice|true-false|fill-blank|short-answer",
+      "type": "multiple-choice|true-false|fill-blank",
       "question": "Well-crafted question text",
       "options": ["option1", "option2", "option3", "option4"], // only for multiple-choice
-      "correctAnswer": "correct answer or index for multiple choice",
+      "correctAnswer": "correct answer (string for fill-blank, boolean for true-false, number index for multiple-choice)",
       "explanation": "Detailed explanation that helps students understand the concept",
       "difficulty": "easy|medium|hard",
       "topic": "specific topic this question covers"
@@ -142,7 +150,7 @@ Please respond with a JSON object in this exact format:
   ]
 }
 
-Ensure all content is educationally sound and promotes effective learning.
+Ensure all content is educationally sound and promotes effective learning with clear, verifiable answers.
 `;
 
   try {
@@ -152,7 +160,7 @@ Ensure all content is educationally sound and promotes effective learning.
         messages: [
           {
             role: "system",
-            content: "You are an expert educational content creator with advanced pedagogical knowledge. Always respond with valid JSON only. Create high-quality, educationally valuable content."
+            content: "You are an expert educational content creator with advanced pedagogical knowledge. Always respond with valid JSON only. Create high-quality, educationally valuable content with clear, verifiable answers."
           },
           {
             role: "user",

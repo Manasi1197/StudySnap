@@ -27,9 +27,11 @@ import {
   AlertCircle,
   Loader2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  File
 } from 'lucide-react';
 import { useQuizGenerator } from '../hooks/useQuizGenerator';
+import { isPDFFile } from '../lib/pdfExtractor';
 import toast from 'react-hot-toast';
 
 const QuizGenerator: React.FC = () => {
@@ -59,14 +61,24 @@ const QuizGenerator: React.FC = () => {
 
   // File upload handling
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    const newFiles = acceptedFiles.map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
-      name: file.name,
-      type: file.type.startsWith('image/') ? 'image' as const : 'text' as const,
-      content: '',
-      size: file.size,
-      processingStatus: 'pending' as const
-    }));
+    const newFiles = acceptedFiles.map(file => {
+      let fileType: 'text' | 'image' | 'pdf' = 'text';
+      
+      if (isPDFFile(file)) {
+        fileType = 'pdf';
+      } else if (file.type.startsWith('image/')) {
+        fileType = 'image';
+      }
+
+      return {
+        id: Math.random().toString(36).substr(2, 9),
+        name: file.name,
+        type: fileType,
+        content: '',
+        size: file.size,
+        processingStatus: 'pending' as const
+      };
+    });
 
     addFiles(newFiles);
     
@@ -120,6 +132,28 @@ const QuizGenerator: React.FC = () => {
   const resetGenerator = () => {
     setCurrentStep('upload');
     reset();
+  };
+
+  const getFileIcon = (fileType: string) => {
+    switch (fileType) {
+      case 'image':
+        return Image;
+      case 'pdf':
+        return File;
+      default:
+        return FileText;
+    }
+  };
+
+  const getFileIconColor = (fileType: string) => {
+    switch (fileType) {
+      case 'image':
+        return 'bg-blue-100 text-blue-600';
+      case 'pdf':
+        return 'bg-red-100 text-red-600';
+      default:
+        return 'bg-green-100 text-green-600';
+    }
   };
 
   if (currentStep === 'processing') {
@@ -445,6 +479,9 @@ const QuizGenerator: React.FC = () => {
                     <div className="w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center">
                       <FileText className="w-8 h-8 text-green-600" />
                     </div>
+                    <div className="w-16 h-16 bg-red-100 rounded-xl flex items-center justify-center">
+                      <File className="w-8 h-8 text-red-600" />
+                    </div>
                   </div>
                   <div>
                     <p className="text-xl font-medium text-gray-900 mb-2">
@@ -465,44 +502,43 @@ const QuizGenerator: React.FC = () => {
                 <div className="mt-8 space-y-4">
                   <h4 className="font-medium text-gray-900">Uploaded Files</h4>
                   <div className="space-y-3">
-                    {uploadedFiles.map(file => (
-                      <div key={file.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div className="flex items-center space-x-4 min-w-0 flex-1">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                            file.type === 'image' ? 'bg-blue-100' : 'bg-green-100'
-                          }`}>
-                            {file.type === 'image' ? (
-                              <Image className="w-5 h-5 text-blue-600" />
-                            ) : (
-                              <FileText className="w-5 h-5 text-green-600" />
+                    {uploadedFiles.map(file => {
+                      const IconComponent = getFileIcon(file.type);
+                      const iconColorClass = getFileIconColor(file.type);
+                      
+                      return (
+                        <div key={file.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                          <div className="flex items-center space-x-4 min-w-0 flex-1">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${iconColorClass}`}>
+                              <IconComponent className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-gray-900 truncate">{file.name}</p>
+                              <p className="text-sm text-gray-500">
+                                {(file.size / 1024).toFixed(1)} KB • {file.type.toUpperCase()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-3 flex-shrink-0">
+                            {file.processingStatus === 'processing' && (
+                              <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
                             )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-gray-900 truncate">{file.name}</p>
-                            <p className="text-sm text-gray-500">
-                              {(file.size / 1024).toFixed(1)} KB
-                            </p>
+                            {file.processingStatus === 'completed' && (
+                              <CheckCircle className="w-5 h-5 text-green-500" />
+                            )}
+                            {file.processingStatus === 'error' && (
+                              <XCircle className="w-5 h-5 text-red-500" />
+                            )}
+                            <button
+                              onClick={() => removeFile(file.id)}
+                              className="text-gray-400 hover:text-red-500 transition-colors"
+                            >
+                              <XCircle className="w-5 h-5" />
+                            </button>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-3 flex-shrink-0">
-                          {file.processingStatus === 'processing' && (
-                            <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-                          )}
-                          {file.processingStatus === 'completed' && (
-                            <CheckCircle className="w-5 h-5 text-green-500" />
-                          )}
-                          {file.processingStatus === 'error' && (
-                            <XCircle className="w-5 h-5 text-red-500" />
-                          )}
-                          <button
-                            onClick={() => removeFile(file.id)}
-                            className="text-gray-400 hover:text-red-500 transition-colors"
-                          >
-                            <XCircle className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

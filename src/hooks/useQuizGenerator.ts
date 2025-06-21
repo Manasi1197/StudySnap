@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { generateQuizWithAI, extractTextFromImage, GenerateQuizRequest } from '../lib/openai';
+import { extractTextFromPDF, isPDFFile } from '../lib/pdfExtractor';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
 export interface UploadedFile {
   id: string;
   name: string;
-  type: 'text' | 'image';
+  type: 'text' | 'image' | 'pdf';
   content: string;
   size: number;
   extractedText?: string;
@@ -35,33 +36,31 @@ export function useQuizGenerator() {
     ));
 
     try {
-      if (file.type.startsWith('image/')) {
+      let extractedText = '';
+
+      if (isPDFFile(file)) {
+        // Process PDF file
+        extractedText = await extractTextFromPDF(file);
+      } else if (file.type.startsWith('image/')) {
         // Convert image to base64 for OpenAI Vision API
         const base64 = await fileToBase64(file);
-        const extractedText = await extractTextFromImage(base64);
-        
-        setUploadedFiles(prev => prev.map(f => 
-          f.id === fileId ? { 
-            ...f, 
-            extractedText, 
-            content: extractedText,
-            processingStatus: 'completed' 
-          } : f
-        ));
+        extractedText = await extractTextFromImage(base64);
       } else {
         // Process text file
-        const text = await file.text();
-        setUploadedFiles(prev => prev.map(f => 
-          f.id === fileId ? { 
-            ...f, 
-            content: text,
-            processingStatus: 'completed' 
-          } : f
-        ));
+        extractedText = await file.text();
       }
+      
+      setUploadedFiles(prev => prev.map(f => 
+        f.id === fileId ? { 
+          ...f, 
+          extractedText, 
+          content: extractedText,
+          processingStatus: 'completed' 
+        } : f
+      ));
     } catch (error) {
       console.error('File processing error:', error);
-      toast.error('Failed to process file');
+      toast.error(`Failed to process ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setUploadedFiles(prev => prev.map(f => 
         f.id === fileId ? { ...f, processingStatus: 'error' } : f
       ));

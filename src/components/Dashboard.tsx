@@ -65,9 +65,11 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     setSubPageData(data);
   };
 
-  const handleBackToQuizGenerator = () => {
+  const handleBackToQuizOverview = () => {
+    // Go back to the quiz overview (review step) instead of upload step
     setCurrentSubPage(null);
     setSubPageData(null);
+    // The QuizGenerator will remain in 'review' state showing the overview
   };
 
   const sidebarItems = [
@@ -190,7 +192,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
             title={subPageData.title}
             description={subPageData.description}
             videoUrl={subPageData.videoUrl}
-            onBack={handleBackToQuizGenerator}
+            onBack={handleBackToQuizOverview}
           />
         );
       }
@@ -200,7 +202,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
           <FlashcardsViewer
             title={subPageData.title}
             flashcards={subPageData.flashcards}
-            onBack={handleBackToQuizGenerator}
+            onBack={handleBackToQuizOverview}
           />
         );
       }

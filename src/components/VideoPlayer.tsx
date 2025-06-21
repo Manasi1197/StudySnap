@@ -23,7 +23,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ title, description, videoUrl,
               className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Back to Quiz</span>
+              <span>Back to Quiz Overview</span>
             </button>
             <div className="h-6 w-px bg-gray-300"></div>
             <div>

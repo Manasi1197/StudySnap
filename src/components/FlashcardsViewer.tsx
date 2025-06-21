@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, RotateCcw, Shuffle, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCcw, Shuffle, BookOpen, ChevronLeft, ChevronRight, Play, Video } from 'lucide-react';
 
 interface Flashcard {
   id: string;
@@ -12,9 +12,17 @@ interface FlashcardsViewerProps {
   title: string;
   flashcards: Flashcard[];
   onBack: () => void;
+  onNavigate?: (page: string, data?: any) => void;
+  quizData?: any;
 }
 
-const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({ title, flashcards, onBack }) => {
+const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({ 
+  title, 
+  flashcards, 
+  onBack, 
+  onNavigate,
+  quizData 
+}) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [shuffledCards, setShuffledCards] = useState(flashcards);
@@ -55,6 +63,24 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({ title, flashcards, 
     setCurrentIndex(0);
     setIsFlipped(false);
     setStudiedCards(new Set());
+  };
+
+  const handleNavigateToVideo = () => {
+    if (onNavigate && quizData) {
+      onNavigate('video-player', {
+        title: quizData.title,
+        description: quizData.description,
+        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+      });
+    }
+  };
+
+  const handleNavigateToQuiz = () => {
+    if (onNavigate && quizData) {
+      onNavigate('take-quiz', {
+        quiz: quizData
+      });
+    }
   };
 
   const progress = ((studiedCards.size) / flashcards.length) * 100;
@@ -231,14 +257,23 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({ title, flashcards, 
 
             {/* Quick Actions */}
             <div className="bg-white rounded-xl p-6 border border-gray-200">
-              <h3 className="font-bold text-gray-900 mb-4">Quick Actions</h3>
+              <h3 className="font-bold text-gray-900 mb-4">Next Steps</h3>
               <div className="space-y-3">
                 <button 
-                  onClick={onBack}
+                  onClick={handleNavigateToVideo}
+                  className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                >
+                  <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
+                    <Video className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="font-medium text-gray-900">Watch Video</span>
+                </button>
+                <button 
+                  onClick={handleNavigateToQuiz}
                   className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
                 >
                   <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-                    <BookOpen className="w-4 h-4 text-white" />
+                    <Play className="w-4 h-4 text-white" />
                   </div>
                   <span className="font-medium text-gray-900">Take Quiz</span>
                 </button>
@@ -246,10 +281,10 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({ title, flashcards, 
                   onClick={onBack}
                   className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
                 >
-                  <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
                     <BookOpen className="w-4 h-4 text-white" />
                   </div>
-                  <span className="font-medium text-gray-900">Watch Video</span>
+                  <span className="font-medium text-gray-900">Back to Overview</span>
                 </button>
               </div>
             </div>

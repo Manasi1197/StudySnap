@@ -1,16 +1,42 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize, RotateCcw, Download } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize, RotateCcw, Download, BookOpen, Video } from 'lucide-react';
 
 interface VideoPlayerProps {
   title: string;
   description: string;
   videoUrl: string;
   onBack: () => void;
+  onNavigate?: (page: string, data?: any) => void;
+  quizData?: any;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ title, description, videoUrl, onBack }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
+  title, 
+  description, 
+  videoUrl, 
+  onBack, 
+  onNavigate,
+  quizData 
+}) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+
+  const handleNavigateToFlashcards = () => {
+    if (onNavigate && quizData) {
+      onNavigate('flashcards', {
+        title: quizData.title,
+        flashcards: quizData.flashcards
+      });
+    }
+  };
+
+  const handleNavigateToQuiz = () => {
+    if (onNavigate && quizData) {
+      onNavigate('take-quiz', {
+        quiz: quizData
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -124,10 +150,19 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ title, description, videoUrl,
 
             {/* Quick Actions */}
             <div className="bg-white rounded-xl p-6 border border-gray-200">
-              <h3 className="font-bold text-gray-900 mb-4">Quick Actions</h3>
+              <h3 className="font-bold text-gray-900 mb-4">Next Steps</h3>
               <div className="space-y-3">
                 <button 
-                  onClick={onBack}
+                  onClick={handleNavigateToFlashcards}
+                  className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                >
+                  <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                    <BookOpen className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="font-medium text-gray-900">Study Flashcards</span>
+                </button>
+                <button 
+                  onClick={handleNavigateToQuiz}
                   className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
                 >
                   <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
@@ -139,10 +174,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ title, description, videoUrl,
                   onClick={onBack}
                   className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
                 >
-                  <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-                    <Play className="w-4 h-4 text-white" />
+                  <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+                    <Video className="w-4 h-4 text-white" />
                   </div>
-                  <span className="font-medium text-gray-900">Study Flashcards</span>
+                  <span className="font-medium text-gray-900">Back to Overview</span>
                 </button>
               </div>
             </div>

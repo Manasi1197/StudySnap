@@ -35,6 +35,7 @@ import {
 import QuizGenerator from './QuizGenerator';
 import VideoPlayer from './VideoPlayer';
 import FlashcardsViewer from './FlashcardsViewer';
+import QuizTaker from './QuizTaker';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 
@@ -47,6 +48,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
   const { user, signOut } = useAuth();
   const [currentSubPage, setCurrentSubPage] = React.useState<string | null>(null);
   const [subPageData, setSubPageData] = React.useState<any>(null);
+  const [quizGeneratorState, setQuizGeneratorState] = React.useState<any>(null);
 
   const handleSignOut = async () => {
     try {
@@ -61,15 +63,31 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
   };
 
   const handleSubPageNavigation = (page: string, data?: any) => {
+    // Store the current quiz generator state when navigating to sub-pages
+    if (page === 'video-player' || page === 'flashcards' || page === 'take-quiz') {
+      setQuizGeneratorState(data);
+    }
     setCurrentSubPage(page);
     setSubPageData(data);
   };
 
   const handleBackToQuizOverview = () => {
-    // Go back to the quiz overview (review step) instead of upload step
+    // Return to the quiz overview (review step) with preserved state
     setCurrentSubPage(null);
     setSubPageData(null);
     // The QuizGenerator will remain in 'review' state showing the overview
+  };
+
+  const handleNavigateFromSubPage = (targetPage: string, data?: any) => {
+    if (targetPage === 'quiz-overview') {
+      handleBackToQuizOverview();
+    } else if (targetPage === 'video-player') {
+      handleSubPageNavigation('video-player', data);
+    } else if (targetPage === 'flashcards') {
+      handleSubPageNavigation('flashcards', data);
+    } else if (targetPage === 'take-quiz') {
+      handleSubPageNavigation('take-quiz', data);
+    }
   };
 
   const sidebarItems = [
@@ -193,6 +211,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
             description={subPageData.description}
             videoUrl={subPageData.videoUrl}
             onBack={handleBackToQuizOverview}
+            onNavigate={handleNavigateFromSubPage}
+            quizData={quizGeneratorState}
           />
         );
       }
@@ -203,6 +223,18 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
             title={subPageData.title}
             flashcards={subPageData.flashcards}
             onBack={handleBackToQuizOverview}
+            onNavigate={handleNavigateFromSubPage}
+            quizData={quizGeneratorState}
+          />
+        );
+      }
+
+      if (currentSubPage === 'take-quiz' && subPageData) {
+        return (
+          <QuizTaker
+            quiz={subPageData.quiz}
+            onBack={handleBackToQuizOverview}
+            onNavigate={handleNavigateFromSubPage}
           />
         );
       }

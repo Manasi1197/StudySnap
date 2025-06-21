@@ -30,10 +30,11 @@ import {
   ChevronUp,
   X,
   Plus,
-  TestTube
+  TestTube,
+  Bug
 } from 'lucide-react';
 import { useQuizGenerator } from '../hooks/useQuizGenerator';
-import { generateVideoWithTavus, testTavusApiKey, updateTavusApiKey, TavusError } from '../lib/tavus';
+import { generateVideoWithTavus, testTavusApiKey, updateTavusApiKey, TavusError, debugTavusIntegration } from '../lib/tavus';
 import ApiKeyManager from './ApiKeyManager';
 import toast from 'react-hot-toast';
 
@@ -55,6 +56,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [videoGenerationProgress, setVideoGenerationProgress] = useState<string>('');
   const [isTestingApiKey, setIsTestingApiKey] = useState(false);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
   const [quizSettings, setQuizSettings] = useState({
     questionCount: 10,
     difficulty: 'mixed',
@@ -140,6 +142,20 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
     }
   };
 
+  // Debug Tavus Integration
+  const handleDebugTavus = async () => {
+    setShowDebugInfo(true);
+    toast.loading('Running Tavus integration debug...', { duration: 2000 });
+    
+    try {
+      await debugTavusIntegration();
+      toast.success('Debug completed! Check console for detailed logs.');
+    } catch (error) {
+      console.error('Debug error:', error);
+      toast.error('Debug failed. Check console for details.');
+    }
+  };
+
   // Generate quiz from content
   const handleGenerateQuiz = async () => {
     if (!hasMinimumContent) {
@@ -191,7 +207,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
       return;
     }
 
-    // Generate video with progress tracking
+    // Generate video with enhanced progress tracking
     setIsGeneratingVideo(true);
     setVideoGenerationProgress('Initializing video generation...');
     
@@ -199,9 +215,12 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
       // Show progress updates
       const progressUpdates = [
         'Connecting to Tavus API...',
+        'Validating API credentials...',
+        'Fetching available replicas...',
         'Processing quiz content...',
         'Creating educational script...',
-        'Generating AI video...',
+        'Submitting video generation request...',
+        'Video is being generated...',
         'Finalizing video production...'
       ];
 
@@ -211,8 +230,10 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
           progressIndex++;
           setVideoGenerationProgress(progressUpdates[progressIndex]);
         }
-      }, 3000);
+      }, 2000);
 
+      console.log('🎬 Starting video generation process...');
+      
       const videoUrl = await generateVideoWithTavus(
         generatedQuiz.title,
         generatedQuiz.description,
@@ -222,6 +243,8 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
       clearInterval(progressInterval);
       setGeneratedVideoUrl(videoUrl);
       setVideoGenerationProgress('Video generation completed!');
+      
+      console.log('✅ Video generation successful:', videoUrl);
       
       if (onNavigate) {
         onNavigate('video-player', {
@@ -234,12 +257,12 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
       
       toast.success('🎬 AI video generated successfully!');
     } catch (error: any) {
-      console.error('Video generation error:', error);
+      console.error('❌ Video generation error:', error);
       setVideoGenerationProgress('');
       
       // Don't show error toast if it's an API key issue (handled by modal)
       if (!error.isExpired && !error.isInvalid) {
-        toast.error('Failed to generate video. Please try again.');
+        toast.error(`Failed to generate video: ${error.message || 'Unknown error'}`);
       }
     } finally {
       setIsGeneratingVideo(false);
@@ -364,6 +387,13 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
                 <TestTube className="w-4 h-4" />
               )}
               <span>Test API</span>
+            </button>
+            <button
+              onClick={handleDebugTavus}
+              className="flex items-center space-x-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors"
+            >
+              <Bug className="w-4 h-4" />
+              <span>Debug</span>
             </button>
             <button
               onClick={() => setShowNewQuizConfirmation(true)}
@@ -601,6 +631,13 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
                 <TestTube className="w-4 h-4" />
               )}
               <span>Test Tavus API</span>
+            </button>
+            <button
+              onClick={handleDebugTavus}
+              className="flex items-center space-x-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors"
+            >
+              <Bug className="w-4 h-4" />
+              <span>Debug</span>
             </button>
             <button
               onClick={() => setShowSettings(!showSettings)}

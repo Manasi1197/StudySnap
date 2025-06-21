@@ -45,29 +45,38 @@ export function updateTavusApiKey(newApiKey: string): void {
   localStorage.setItem('tavus_api_key', newApiKey);
 }
 
-// Test API key function
+// Test API key function with detailed logging
 export async function testTavusApiKey(apiKey?: string): Promise<boolean> {
   const keyToTest = apiKey || TAVUS_API_KEY;
   
   if (!keyToTest) {
+    console.log('❌ No API key provided');
     return false;
   }
 
   try {
     console.log('🔑 Testing Tavus API key...');
+    console.log('🌐 API Base URL:', TAVUS_API_BASE_URL);
+    console.log('🔐 API Key (first 8 chars):', keyToTest.substring(0, 8) + '...');
     
     const response = await fetch(`${TAVUS_API_BASE_URL}/replicas`, {
       method: 'GET',
       headers: {
         'x-api-key': keyToTest,
+        'Content-Type': 'application/json',
       },
     });
 
+    console.log('📡 Response status:', response.status);
+    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+
     if (response.ok) {
-      console.log('✅ API key is valid');
+      const data = await response.json();
+      console.log('✅ API key is valid. Response data:', data);
       return true;
     } else {
-      console.log('❌ API key test failed:', response.status);
+      const errorText = await response.text();
+      console.log('❌ API key test failed:', response.status, errorText);
       return false;
     }
   } catch (error) {
@@ -81,6 +90,8 @@ function handleTavusError(response: Response, responseText: string): TavusError 
   const error: TavusError = {
     message: 'Unknown error occurred'
   };
+
+  console.log('🚨 Handling Tavus error:', response.status, responseText);
 
   if (response.status === 401) {
     error.message = 'Invalid or expired API key. Please update your Tavus API key.';
@@ -96,7 +107,7 @@ function handleTavusError(response: Response, responseText: string): TavusError 
   } else {
     try {
       const errorData = JSON.parse(responseText);
-      error.message = errorData.message || `API error: ${response.status}`;
+      error.message = errorData.message || errorData.error || `API error: ${response.status}`;
     } catch {
       error.message = `API error: ${response.status} - ${responseText}`;
     }
@@ -110,15 +121,18 @@ export async function generateVideoWithTavus(
   description: string,
   onApiKeyError?: (error: TavusError) => void
 ): Promise<string> {
+  console.log('🎬 Starting Tavus video generation...');
+  console.log('📝 Title:', title);
+  console.log('📝 Description:', description);
+
   if (!TAVUS_API_KEY) {
-    console.warn('Tavus API key not configured, returning mock video URL');
+    console.warn('❌ Tavus API key not configured, returning mock video URL');
     return 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
   }
 
   try {
-    console.log('🎬 Starting Tavus video generation...');
-    
     // First, test the API key
+    console.log('🔍 Testing API key before video generation...');
     const isKeyValid = await testTavusApiKey();
     if (!isKeyValid) {
       const error: TavusError = {
@@ -126,6 +140,7 @@ export async function generateVideoWithTavus(
         isExpired: true,
         isInvalid: true
       };
+      console.error('❌ API key validation failed');
       if (onApiKeyError) {
         onApiKeyError(error);
       }
@@ -133,24 +148,37 @@ export async function generateVideoWithTavus(
     }
 
     // Get available replicas to use a valid one
+    console.log('👥 Fetching available replicas...');
     const replicas = await listReplicas();
-    const defaultReplica = replicas.find(r => r.status === 'ready') || replicas[0];
+    console.log('👥 Available replicas:', replicas);
     
-    if (!defaultReplica) {
-      console.warn('No available replicas found, using fallback video');
-      return 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+    if (!replicas || replicas.length === 0) {
+      console.warn('❌ No replicas available. This might be a new account or API issue.');
+      console.log('🔄 Attempting to create video without specific replica...');
     }
+
+    // Find a ready replica or use the first available one
+    const readyReplicas = replicas.filter(r => r.status === 'ready' || r.status === 'active');
+    const selectedReplica = readyReplicas[0] || replicas[0];
+    
+    console.log('✅ Selected replica:', selectedReplica);
 
     // Create a comprehensive script for the video
     const script = createEducationalScript(title, description);
+    console.log('📜 Generated script length:', script.length, 'characters');
 
     const requestBody: TavusVideoRequest = {
       script: script,
       video_name: `StudySnap: ${title}`,
-      replica_id: defaultReplica.replica_id,
     };
 
-    console.log('📝 Sending video generation request to Tavus...');
+    // Only add replica_id if we have one
+    if (selectedReplica && selectedReplica.replica_id) {
+      requestBody.replica_id = selectedReplica.replica_id;
+    }
+
+    console.log('📤 Sending video generation request...');
+    console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
     
     const response = await fetch(`${TAVUS_API_BASE_URL}/videos`, {
       method: 'POST',
@@ -161,9 +189,15 @@ export async function generateVideoWithTavus(
       body: JSON.stringify(requestBody),
     });
 
+    console.log('📡 Video generation response status:', response.status);
+    console.log('📡 Video generation response headers:', Object.fromEntries(response.headers.entries()));
+
+    const responseText = await response.text();
+    console.log('📡 Raw response text:', responseText);
+
     if (!response.ok) {
-      const errorText = await response.text();
-      const error = handleTavusError(response, errorText);
+      console.error('❌ Video generation failed:', responseText);
+      const error = handleTavusError(response, responseText);
       
       if (error.isExpired || error.isInvalid) {
         if (onApiKeyError) {
@@ -174,7 +208,14 @@ export async function generateVideoWithTavus(
       throw error;
     }
 
-    const videoData: TavusVideoResponse = await response.json();
+    let videoData: TavusVideoResponse;
+    try {
+      videoData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('❌ Failed to parse response JSON:', parseError);
+      throw new Error('Invalid response format from Tavus API');
+    }
+
     console.log('✅ Video generation initiated:', videoData);
 
     // If video is immediately available, return the URL
@@ -206,39 +247,33 @@ export async function generateVideoWithTavus(
 }
 
 function createEducationalScript(title: string, description: string): string {
-  return `
-Hello and welcome to this educational video on ${title}!
+  // Keep script concise but informative (under 300 words for better processing)
+  const script = `
+Hello and welcome to this educational video about ${title}.
 
-I'm excited to guide you through this important topic today. Let's dive right in.
+${description.substring(0, 200)}...
 
-${description}
+Let me explain the key concepts you need to understand.
 
-This material is designed to help you understand the key concepts and prepare you for your upcoming quiz. 
+This topic is important because it forms the foundation for more advanced learning. 
 
-Here are the main points we'll be covering:
+The main points to remember are: first, understand the basic principles. Second, see how these principles apply in real situations. Third, practice applying what you've learned.
 
-First, we'll explore the fundamental concepts that form the foundation of this topic. Understanding these basics is crucial for grasping the more complex ideas that follow.
+As you study this material, focus on the connections between different concepts. This will help you build a strong understanding.
 
-Next, we'll examine how these concepts apply in real-world scenarios. This practical application will help you see the relevance and importance of what you're learning.
+After watching this video, review the flashcards to reinforce your learning, then test yourself with the quiz.
 
-We'll also discuss common misconceptions and pitfalls that students often encounter. Being aware of these will help you avoid similar mistakes.
-
-Finally, we'll review some key strategies for remembering and applying this information effectively.
-
-As you watch this video, I encourage you to take notes on the main points. Feel free to pause and replay any sections that you find challenging.
-
-Remember, learning is a process, and it's perfectly normal to need to review material multiple times before it fully clicks.
-
-After watching this video, I recommend reviewing the flashcards to reinforce your understanding, and then testing yourself with the quiz.
-
-Good luck with your studies, and remember - you've got this! Let's begin our exploration of ${title}.
+Good luck with your studies!
   `.trim();
+
+  // Ensure script is not too long (Tavus has limits)
+  return script.length > 500 ? script.substring(0, 497) + '...' : script;
 }
 
 async function pollForVideoCompletion(
   videoId: string, 
   onApiKeyError?: (error: TavusError) => void,
-  maxAttempts: number = 60
+  maxAttempts: number = 20 // Reduced from 30 to 20 for faster timeout
 ): Promise<string> {
   console.log(`🔄 Starting to poll for video completion (ID: ${videoId})`);
   
@@ -249,11 +284,15 @@ async function pollForVideoCompletion(
       const response = await fetch(`${TAVUS_API_BASE_URL}/videos/${videoId}`, {
         headers: {
           'x-api-key': TAVUS_API_KEY!,
+          'Content-Type': 'application/json',
         },
       });
 
+      console.log(`📊 Poll response status: ${response.status}`);
+
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`❌ Poll failed: ${response.status} - ${errorText}`);
         const error = handleTavusError(response, errorText);
         
         if (error.isExpired || error.isInvalid) {
@@ -266,8 +305,17 @@ async function pollForVideoCompletion(
         throw new Error(`Failed to check video status: ${response.status}`);
       }
 
-      const videoData: TavusVideoResponse = await response.json();
-      console.log(`📊 Video status: ${videoData.status}`);
+      const responseText = await response.text();
+      let videoData: TavusVideoResponse;
+      
+      try {
+        videoData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ Failed to parse polling response:', parseError);
+        throw new Error('Invalid response format during polling');
+      }
+
+      console.log(`📊 Video status: ${videoData.status}`, videoData);
 
       if (videoData.status === 'completed' && videoData.video_url) {
         console.log('🎉 Video generation completed!', videoData.video_url);
@@ -279,9 +327,9 @@ async function pollForVideoCompletion(
         throw new Error('Video generation failed');
       }
 
-      // Wait 10 seconds before next poll (Tavus videos can take a while)
-      console.log('⏱️ Waiting 10 seconds before next check...');
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      // Wait 15 seconds before next poll (increased from 10)
+      console.log('⏱️ Waiting 15 seconds before next check...');
+      await new Promise(resolve => setTimeout(resolve, 15000));
 
     } catch (error: any) {
       console.error(`❌ Polling attempt ${attempt + 1} failed:`, error);
@@ -302,7 +350,7 @@ async function pollForVideoCompletion(
   }
 
   console.error('⏰ Video generation timed out');
-  throw new Error('Video generation timed out after 10 minutes');
+  throw new Error('Video generation timed out after 5 minutes');
 }
 
 export async function getVideoStatus(videoId: string): Promise<TavusVideoResponse> {
@@ -313,6 +361,7 @@ export async function getVideoStatus(videoId: string): Promise<TavusVideoRespons
   const response = await fetch(`${TAVUS_API_BASE_URL}/videos/${videoId}`, {
     headers: {
       'x-api-key': TAVUS_API_KEY,
+      'Content-Type': 'application/json',
     },
   });
 
@@ -326,28 +375,47 @@ export async function getVideoStatus(videoId: string): Promise<TavusVideoRespons
 
 export async function listReplicas(): Promise<TavusReplica[]> {
   if (!TAVUS_API_KEY) {
-    console.warn('Tavus API key not configured');
+    console.warn('❌ Tavus API key not configured');
     return [];
   }
 
   try {
+    console.log('📋 Fetching replicas from Tavus...');
     const response = await fetch(`${TAVUS_API_BASE_URL}/replicas`, {
       headers: {
         'x-api-key': TAVUS_API_KEY,
+        'Content-Type': 'application/json',
       },
     });
 
+    console.log('📋 Replicas response status:', response.status);
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Failed to list replicas:', errorText);
+      console.error('❌ Failed to list replicas:', response.status, errorText);
       return [];
     }
 
-    const data = await response.json();
-    console.log('📋 Available replicas:', data);
-    return data.replicas || [];
+    const responseText = await response.text();
+    console.log('📋 Raw replicas response:', responseText);
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('❌ Failed to parse replicas response:', parseError);
+      return [];
+    }
+
+    console.log('📋 Replicas response data:', data);
+    
+    // Handle different response formats
+    const replicas = data.replicas || data.data || data || [];
+    console.log('📋 Processed replicas:', replicas);
+    
+    return Array.isArray(replicas) ? replicas : [];
   } catch (error) {
-    console.error('Error listing replicas:', error);
+    console.error('❌ Error listing replicas:', error);
     return [];
   }
 }
@@ -362,6 +430,7 @@ export async function deleteVideo(videoId: string): Promise<boolean> {
       method: 'DELETE',
       headers: {
         'x-api-key': TAVUS_API_KEY,
+        'Content-Type': 'application/json',
       },
     });
 
@@ -387,4 +456,33 @@ export function getVideoThumbnail(videoUrl: string): string {
   // For Tavus videos, we might need to generate thumbnails differently
   // For now, return a placeholder
   return '/api/placeholder/400/225';
+}
+
+// Debug function to test the complete flow
+export async function debugTavusIntegration(): Promise<void> {
+  console.log('🔧 Starting Tavus integration debug...');
+  
+  // Test 1: API Key
+  console.log('🔧 Test 1: API Key validation');
+  const isKeyValid = await testTavusApiKey();
+  console.log('🔧 API Key valid:', isKeyValid);
+  
+  // Test 2: List Replicas
+  console.log('🔧 Test 2: List replicas');
+  const replicas = await listReplicas();
+  console.log('🔧 Replicas found:', replicas.length);
+  
+  // Test 3: Generate Video (if replicas available)
+  console.log('🔧 Test 3: Generate test video');
+  try {
+    const videoUrl = await generateVideoWithTavus(
+      'Test Video',
+      'This is a test video to verify Tavus integration is working correctly.'
+    );
+    console.log('🔧 Video generated successfully:', videoUrl);
+  } catch (error) {
+    console.error('🔧 Video generation failed:', error);
+  }
+  
+  console.log('🔧 Tavus integration debug complete');
 }

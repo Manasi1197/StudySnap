@@ -37,7 +37,11 @@ import {
   SortDesc,
   X,
   Save,
-  Link
+  Link,
+  ZoomIn,
+  FileImage,
+  FileType,
+  ArrowLeft
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -79,8 +83,10 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<StudyMaterial | null>(null);
   const [sharingMaterial, setSharingMaterial] = useState<StudyMaterial | null>(null);
+  const [viewingMaterial, setViewingMaterial] = useState<StudyMaterial | null>(null);
   const [uploadingFiles, setUploadingFiles] = useState<File[]>([]);
   const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set());
 
@@ -330,6 +336,11 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
       console.error('Share error:', error);
       toast.error('Failed to create share link');
     }
+  };
+
+  const viewMaterial = (material: StudyMaterial) => {
+    setViewingMaterial(material);
+    setShowViewModal(true);
   };
 
   const generateQuizFromMaterial = (material: StudyMaterial) => {
@@ -653,6 +664,143 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
     );
   };
 
+  // View Material Modal Component
+  const ViewModal = () => {
+    if (!viewingMaterial) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col relative">
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => {
+                  setShowViewModal(false);
+                  setViewingMaterial(null);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div className="flex items-center space-x-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  viewingMaterial.file_type === 'image' ? 'bg-blue-100' :
+                  viewingMaterial.file_type === 'pdf' ? 'bg-red-100' : 'bg-green-100'
+                }`}>
+                  {getFileIcon(viewingMaterial.file_type)}
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">{viewingMaterial.title}</h2>
+                  <p className="text-sm text-gray-500">
+                    {viewingMaterial.file_type.toUpperCase()} • {formatFileSize(viewingMaterial.file_size)} • {formatDate(viewingMaterial.created_at)}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => toggleFavorite(viewingMaterial.id)}
+                className="p-2 text-gray-400 hover:text-yellow-500 transition-colors rounded-lg hover:bg-gray-100"
+                title={viewingMaterial.is_favorite ? "Remove from favorites" : "Add to favorites"}
+              >
+                {viewingMaterial.is_favorite ? (
+                  <Star className="w-5 h-5 fill-current text-yellow-500" />
+                ) : (
+                  <StarOff className="w-5 h-5" />
+                )}
+              </button>
+              <button
+                onClick={() => downloadMaterial(viewingMaterial)}
+                className="p-2 text-gray-400 hover:text-blue-500 transition-colors rounded-lg hover:bg-gray-100"
+                title="Download"
+              >
+                <Download className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => {
+                  setSharingMaterial(viewingMaterial);
+                  setShowShareModal(true);
+                }}
+                className="p-2 text-gray-400 hover:text-purple-500 transition-colors rounded-lg hover:bg-gray-100"
+                title="Share"
+              >
+                <Share2 className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => {
+                  setShowViewModal(false);
+                  setViewingMaterial(null);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-hidden">
+            {viewingMaterial.file_type === 'image' && viewingMaterial.file_url ? (
+              <div className="h-full flex flex-col">
+                <div className="flex-1 flex items-center justify-center bg-gray-50 p-6">
+                  <img
+                    src={`data:image/jpeg;base64,${viewingMaterial.file_url}`}
+                    alt={viewingMaterial.title}
+                    className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+                  />
+                </div>
+                {viewingMaterial.extracted_text && (
+                  <div className="border-t border-gray-200 p-6 max-h-48 overflow-y-auto">
+                    <h3 className="font-medium text-gray-900 mb-3 flex items-center">
+                      <FileType className="w-4 h-4 mr-2" />
+                      Extracted Text
+                    </h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                        {viewingMaterial.extracted_text}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="h-full p-6 overflow-y-auto">
+                <div className="max-w-4xl mx-auto">
+                  <div className="bg-white rounded-lg border border-gray-200 p-8">
+                    <div className="prose prose-gray max-w-none">
+                      <div className="whitespace-pre-wrap text-gray-800 leading-relaxed text-base">
+                        {viewingMaterial.content || viewingMaterial.extracted_text || 'No content available'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer Actions */}
+          <div className="border-t border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-500">
+                {viewingMaterial.file_type === 'image' ? 'Image with extracted text' : 
+                 viewingMaterial.file_type === 'pdf' ? 'PDF with extracted text' : 'Text document'}
+              </div>
+              <button
+                onClick={() => generateQuizFromMaterial(viewingMaterial)}
+                className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
+              >
+                <Brain className="w-4 h-4" />
+                <span>Generate Quiz</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -838,6 +986,13 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                           </button>
                           <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-lg shadow-lg py-2 w-48 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10">
                             <button
+                              onClick={() => viewMaterial(material)}
+                              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                            >
+                              <Eye className="w-4 h-4" />
+                              <span>View</span>
+                            </button>
+                            <button
                               onClick={() => generateQuizFromMaterial(material)}
                               className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                             >
@@ -894,13 +1049,20 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                       <span>{formatDate(material.created_at)}</span>
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-gray-100">
+                    <div className="mt-4 pt-4 border-t border-gray-100 flex space-x-2">
+                      <button
+                        onClick={() => viewMaterial(material)}
+                        className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium flex items-center justify-center space-x-2"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>View</span>
+                      </button>
                       <button
                         onClick={() => generateQuizFromMaterial(material)}
-                        className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium flex items-center justify-center space-x-2"
+                        className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium flex items-center justify-center space-x-2"
                       >
                         <Brain className="w-4 h-4" />
-                        <span>Generate Quiz</span>
+                        <span>Quiz</span>
                       </button>
                     </div>
                   </div>
@@ -954,6 +1116,13 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                         ) : (
                           <StarOff className="w-4 h-4" />
                         )}
+                      </button>
+                      <button
+                        onClick={() => viewMaterial(material)}
+                        className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
+                        title="View Material"
+                      >
+                        <Eye className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => generateQuizFromMaterial(material)}
@@ -1037,6 +1206,7 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
       {showUploadModal && <UploadModal />}
       {showEditModal && <EditModal />}
       {showShareModal && <ShareModal />}
+      {showViewModal && <ViewModal />}
     </div>
   );
 };

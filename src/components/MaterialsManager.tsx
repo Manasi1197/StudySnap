@@ -35,7 +35,9 @@ import {
   User,
   SortAsc,
   SortDesc,
-  X
+  X,
+  Save,
+  Link
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -76,7 +78,9 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
   const [selectedMaterials, setSelectedMaterials] = useState<Set<string>>(new Set());
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<StudyMaterial | null>(null);
+  const [sharingMaterial, setSharingMaterial] = useState<StudyMaterial | null>(null);
   const [uploadingFiles, setUploadingFiles] = useState<File[]>([]);
   const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set());
 
@@ -162,7 +166,8 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
             file_url: fileUrl || null,
             file_size: file.size,
             extracted_text: extractedText,
-            processing_status: 'completed'
+            processing_status: 'completed',
+            is_favorite: false
           });
 
         if (error) throw error;
@@ -187,6 +192,10 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
   };
 
   const deleteMaterial = async (materialId: string) => {
+    if (!confirm('Are you sure you want to delete this material? This action cannot be undone.')) {
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('study_materials')
@@ -209,22 +218,117 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
       const material = materials.find(m => m.id === materialId);
       if (!material) return;
 
+      const newFavoriteStatus = !material.is_favorite;
+
       const { error } = await supabase
         .from('study_materials')
-        .update({ is_favorite: !material.is_favorite })
+        .update({ is_favorite: newFavoriteStatus })
         .eq('id', materialId)
         .eq('user_id', user?.id);
 
       if (error) throw error;
 
       setMaterials(prev => prev.map(m => 
-        m.id === materialId ? { ...m, is_favorite: !m.is_favorite } : m
+        m.id === materialId ? { ...m, is_favorite: newFavoriteStatus } : m
       ));
 
-      toast.success(material.is_favorite ? 'Removed from favorites' : 'Added to favorites');
+      toast.success(newFavoriteStatus ? 'Added to favorites' : 'Removed from favorites');
     } catch (error: any) {
       console.error('Error updating favorite:', error);
       toast.error('Failed to update favorite');
+    }
+  };
+
+  const editMaterial = async (materialId: string, newTitle: string) => {
+    try {
+      const { error } = await supabase
+        .from('study_materials')
+        .update({ 
+          title: newTitle,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', materialId)
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      setMaterials(prev => prev.map(m => 
+        m.id === materialId ? { ...m, title: newTitle } : m
+      ));
+
+      toast.success('Material updated successfully');
+      setShowEditModal(false);
+      setEditingMaterial(null);
+    } catch (error: any) {
+      console.error('Error updating material:', error);
+      toast.error('Failed to update material');
+    }
+  };
+
+  const downloadMaterial = async (material: StudyMaterial) => {
+    try {
+      toast.loading('Preparing download...');
+      
+      let content = '';
+      let filename = '';
+      let mimeType = 'text/plain';
+
+      if (material.file_type === 'image' && material.file_url) {
+        // For images, download the base64 data
+        const base64Data = material.file_url;
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'image/jpeg' });
+        
+        const link = document.createElement('a');
+        link.href = window.URL.createObjectURL(blob);
+        link.download = `${material.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(link.href);
+      } else {
+        // For text and PDF (extracted text), download as text file
+        content = material.content || material.extracted_text || '';
+        filename = `${material.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+        
+        const blob = new Blob([content], { type: mimeType });
+        const link = document.createElement('a');
+        link.href = window.URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(link.href);
+      }
+      
+      toast.dismiss();
+      toast.success('Download started!');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.dismiss();
+      toast.error('Failed to download material. Please try again.');
+    }
+  };
+
+  const shareMaterial = async (material: StudyMaterial) => {
+    try {
+      // Create a shareable link (in a real app, this would be a proper sharing system)
+      const shareUrl = `${window.location.origin}/shared/material/${material.id}`;
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Share link copied to clipboard!');
+      
+      setShowShareModal(false);
+      setSharingMaterial(null);
+    } catch (error) {
+      console.error('Share error:', error);
+      toast.error('Failed to create share link');
     }
   };
 
@@ -391,6 +495,163 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
       </div>
     </div>
   );
+
+  // Edit Modal Component
+  const EditModal = () => {
+    const [newTitle, setNewTitle] = useState(editingMaterial?.title || '');
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-8 w-full max-w-md relative">
+          <button
+            onClick={() => {
+              setShowEditModal(false);
+              setEditingMaterial(null);
+            }}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Edit3 className="w-8 h-8 text-green-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Edit Material</h2>
+            <p className="text-gray-600">Update the title of your study material</p>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Material Title
+              </label>
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="Enter material title..."
+              />
+            </div>
+
+            <div className="flex space-x-4">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingMaterial(null);
+                }}
+                className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (editingMaterial && newTitle.trim()) {
+                    editMaterial(editingMaterial.id, newTitle.trim());
+                  }
+                }}
+                disabled={!newTitle.trim()}
+                className="flex-1 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                <Save className="w-4 h-4" />
+                <span>Save Changes</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Share Modal Component
+  const ShareModal = () => {
+    const shareUrl = sharingMaterial ? `${window.location.origin}/shared/material/${sharingMaterial.id}` : '';
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-8 w-full max-w-md relative">
+          <button
+            onClick={() => {
+              setShowShareModal(false);
+              setSharingMaterial(null);
+            }}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Share2 className="w-8 h-8 text-purple-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Share Material</h2>
+            <p className="text-gray-600">Share "{sharingMaterial?.title}" with others</p>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Share Link
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={shareUrl}
+                  readOnly
+                  className="flex-1 p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-600"
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(shareUrl);
+                    toast.success('Link copied to clipboard!');
+                  }}
+                  className="p-3 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-medium text-blue-900 mb-2 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-2" />
+                Sharing Information
+              </h4>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>• Anyone with this link can view the material</li>
+                <li>• The link will remain active until you delete the material</li>
+                <li>• Viewers cannot edit or download the original file</li>
+              </ul>
+            </div>
+
+            <div className="flex space-x-4">
+              <button
+                onClick={() => {
+                  setShowShareModal(false);
+                  setSharingMaterial(null);
+                }}
+                className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  if (sharingMaterial) {
+                    shareMaterial(sharingMaterial);
+                  }
+                }}
+                className="flex-1 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-medium flex items-center justify-center space-x-2"
+              >
+                <Link className="w-4 h-4" />
+                <span>Copy Link</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -583,15 +844,30 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                               <Brain className="w-4 h-4" />
                               <span>Generate Quiz</span>
                             </button>
-                            <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2">
+                            <button
+                              onClick={() => {
+                                setSharingMaterial(material);
+                                setShowShareModal(true);
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                            >
                               <Share2 className="w-4 h-4" />
                               <span>Share</span>
                             </button>
-                            <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2">
+                            <button
+                              onClick={() => {
+                                setEditingMaterial(material);
+                                setShowEditModal(true);
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                            >
                               <Edit3 className="w-4 h-4" />
                               <span>Edit</span>
                             </button>
-                            <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2">
+                            <button
+                              onClick={() => downloadMaterial(material)}
+                              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                            >
                               <Download className="w-4 h-4" />
                               <span>Download</span>
                             </button>
@@ -667,14 +943,66 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                     <div className="col-span-2 flex items-center">
                       <span className="text-sm text-gray-600">{formatDate(material.created_at)}</span>
                     </div>
-                    <div className="col-span-1 flex items-center justify-end">
+                    <div className="col-span-1 flex items-center justify-end space-x-2">
+                      <button
+                        onClick={() => toggleFavorite(material.id)}
+                        className="p-1 text-gray-400 hover:text-yellow-500 transition-colors"
+                        title={material.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                      >
+                        {material.is_favorite ? (
+                          <Star className="w-4 h-4 fill-current text-yellow-500" />
+                        ) : (
+                          <StarOff className="w-4 h-4" />
+                        )}
+                      </button>
                       <button
                         onClick={() => generateQuizFromMaterial(material)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                         title="Generate Quiz"
                       >
                         <Brain className="w-4 h-4" />
                       </button>
+                      <div className="relative group/menu">
+                        <button className="p-1 text-gray-400 hover:text-gray-600 transition-colors">
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                        <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-lg shadow-lg py-2 w-48 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10">
+                          <button
+                            onClick={() => {
+                              setSharingMaterial(material);
+                              setShowShareModal(true);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            <span>Share</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingMaterial(material);
+                              setShowEditModal(true);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            onClick={() => downloadMaterial(material)}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                          >
+                            <Download className="w-4 h-4" />
+                            <span>Download</span>
+                          </button>
+                          <button
+                            onClick={() => deleteMaterial(material.id)}
+                            className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -705,8 +1033,10 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
         )}
       </div>
 
-      {/* Upload Modal */}
+      {/* Modals */}
       {showUploadModal && <UploadModal />}
+      {showEditModal && <EditModal />}
+      {showShareModal && <ShareModal />}
     </div>
   );
 };

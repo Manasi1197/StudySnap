@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize, RotateCcw, Download, BookOpen, Video } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize, Download, BookOpen } from 'lucide-react';
 
 interface VideoPlayerProps {
   title: string;
@@ -31,6 +31,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (onNavigate) {
       onNavigate('take-quiz');
     }
+  };
+
+  const handleDownloadVideo = () => {
+    // Create a temporary anchor element to trigger download
+    const link = document.createElement('a');
+    link.href = videoUrl;
+    link.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -83,13 +93,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </p>
               
               <div className="flex items-center space-x-4">
-                <button className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                <button 
+                  onClick={handleDownloadVideo}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                >
                   <Download className="w-4 h-4" />
                   <span>Download Video</span>
-                </button>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                  <RotateCcw className="w-4 h-4" />
-                  <span>Regenerate</span>
                 </button>
               </div>
             </div>
@@ -164,15 +173,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     <Play className="w-4 h-4 text-white" />
                   </div>
                   <span className="font-medium text-gray-900">Take Quiz</span>
-                </button>
-                <button 
-                  onClick={onBack}
-                  className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
-                >
-                  <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
-                    <Video className="w-4 h-4 text-white" />
-                  </div>
-                  <span className="font-medium text-gray-900">Back to Overview</span>
                 </button>
               </div>
             </div>

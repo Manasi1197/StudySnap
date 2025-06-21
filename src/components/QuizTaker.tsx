@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, Clock, CheckCircle, XCircle, AlertCircle, Trophy, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, XCircle, AlertCircle, Trophy, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Question {
@@ -41,7 +41,6 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [showResults, setShowResults] = useState(false);
-  const [timeElapsed, setTimeElapsed] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   // Early return if quiz data is invalid
@@ -53,22 +52,6 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
   const totalQuestions = quiz.questions.length;
   const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
 
-  // Timer
-  useEffect(() => {
-    if (!showResults) {
-      const timer = setInterval(() => {
-        setTimeElapsed(prev => prev + 1);
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [showResults]);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const handleAnswerChange = (answer: any) => {
     setAnswers(prev => ({
       ...prev,
@@ -77,6 +60,12 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
   };
 
   const nextQuestion = () => {
+    // Check if current question is answered before proceeding
+    if (answers[currentQuestion.id] === undefined || answers[currentQuestion.id] === '') {
+      toast.error('Please answer the current question before proceeding.');
+      return;
+    }
+
     if (currentQuestionIndex < totalQuestions - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     }
@@ -89,6 +78,16 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
   };
 
   const submitQuiz = () => {
+    // Check if all questions are answered
+    const unansweredQuestions = quiz.questions.filter(q => 
+      answers[q.id] === undefined || answers[q.id] === ''
+    );
+
+    if (unansweredQuestions.length > 0) {
+      toast.error(`Please answer all questions before submitting. ${unansweredQuestions.length} questions remaining.`);
+      return;
+    }
+
     setIsSubmitted(true);
     setShowResults(true);
   };
@@ -116,7 +115,6 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
     setCurrentQuestionIndex(0);
     setAnswers({});
     setShowResults(false);
-    setTimeElapsed(0);
     setIsSubmitted(false);
   };
 
@@ -168,9 +166,6 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
                 {percentage}%
               </div>
               <div className="flex justify-center space-x-8 text-sm text-gray-500">
-                <div>
-                  <span className="font-medium">Time:</span> {formatTime(timeElapsed)}
-                </div>
                 <div>
                   <span className="font-medium">Questions:</span> {totalQuestions}
                 </div>
@@ -271,12 +266,6 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
             <div>
               <h1 className="text-xl font-bold text-gray-900">{quiz.title}</h1>
               <p className="text-gray-600">Question {currentQuestionIndex + 1} of {totalQuestions}</p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 text-gray-600">
-              <Clock className="w-4 h-4" />
-              <span>{formatTime(timeElapsed)}</span>
             </div>
           </div>
         </div>
@@ -389,8 +378,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
             {currentQuestionIndex === totalQuestions - 1 ? (
               <button
                 onClick={submitQuiz}
-                disabled={Object.keys(answers).length !== totalQuestions}
-                className="flex items-center space-x-2 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center space-x-2 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
               >
                 <CheckCircle className="w-4 h-4" />
                 <span>Submit Quiz</span>

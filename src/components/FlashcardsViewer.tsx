@@ -271,15 +271,6 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
                   </div>
                   <span className="font-medium text-gray-900">Take Quiz</span>
                 </button>
-                <button 
-                  onClick={onBack}
-                  className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
-                >
-                  <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
-                    <BookOpen className="w-4 h-4 text-white" />
-                  </div>
-                  <span className="font-medium text-gray-900">Back to Overview</span>
-                </button>
               </div>
             </div>
           </div>

@@ -509,13 +509,16 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!currentRoom || !user) return;
 
     try {
+      // Generate a proper UUID for the demo quiz
+      const demoQuizId = crypto.randomUUID();
+      
       const { error } = await supabase
         .from('room_shared_content')
         .insert({
           room_id: currentRoom.id,
           user_id: user.id,
           content_type: 'quiz',
-          content_id: quizData.id || 'demo-quiz'
+          content_id: quizData.id || demoQuizId
         });
 
       if (error) throw error;
@@ -543,13 +546,16 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!currentRoom || !user) return;
 
     try {
+      // Generate a proper UUID for the demo resource
+      const demoResourceId = crypto.randomUUID();
+      
       const { error } = await supabase
         .from('room_shared_content')
         .insert({
           room_id: currentRoom.id,
           user_id: user.id,
           content_type: 'study_material',
-          content_id: resourceData.id || 'demo-resource'
+          content_id: resourceData.id || demoResourceId
         });
 
       if (error) throw error;
@@ -979,7 +985,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                   <h4 className="font-medium text-gray-900">Demo Quiz</h4>
                   <p className="text-sm text-gray-600">Sample quiz for demonstration</p>
                   <button
-                    onClick={() => shareQuiz({ id: 'demo-quiz', title: 'Demo Quiz' })}
+                    onClick={() => shareQuiz({ title: 'Demo Quiz' })}
                     className="mt-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
                   >
                     Share This Quiz
@@ -1012,7 +1018,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                   <h4 className="font-medium text-gray-900">Study Notes</h4>
                   <p className="text-sm text-gray-600">Sample study material</p>
                   <button
-                    onClick={() => addResource({ id: 'demo-resource', title: 'Study Notes' })}
+                    onClick={() => addResource({ title: 'Study Notes' })}
                     className="mt-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
                   >
                     Share This Resource

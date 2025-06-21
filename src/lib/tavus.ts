@@ -1,6 +1,12 @@
 // Tavus API integration for AI video generation
-const TAVUS_API_KEY = import.meta.env.VITE_TAVUS_API_KEY || '98ab985a6f364892b9cb2ce85f2115e1';
+let TAVUS_API_KEY = import.meta.env.VITE_TAVUS_API_KEY || '98ab985a6f364892b9cb2ce85f2115e1';
 const TAVUS_API_BASE_URL = 'https://tavusapi.com/v2';
+
+// Load API key from localStorage if available
+const storedApiKey = localStorage.getItem('tavus_api_key');
+if (storedApiKey) {
+  TAVUS_API_KEY = storedApiKey;
+}
 
 export interface TavusVideoRequest {
   script: string;
@@ -26,20 +32,107 @@ export interface TavusReplica {
   created_at: string;
 }
 
+export interface TavusError {
+  message: string;
+  code?: string;
+  isExpired?: boolean;
+  isInvalid?: boolean;
+}
+
+// Update API key function
+export function updateTavusApiKey(newApiKey: string): void {
+  TAVUS_API_KEY = newApiKey;
+  localStorage.setItem('tavus_api_key', newApiKey);
+}
+
+// Test API key function
+export async function testTavusApiKey(apiKey?: string): Promise<boolean> {
+  const keyToTest = apiKey || TAVUS_API_KEY;
+  
+  if (!keyToTest) {
+    return false;
+  }
+
+  try {
+    console.log('🔑 Testing Tavus API key...');
+    
+    const response = await fetch(`${TAVUS_API_BASE_URL}/replicas`, {
+      method: 'GET',
+      headers: {
+        'x-api-key': keyToTest,
+      },
+    });
+
+    if (response.ok) {
+      console.log('✅ API key is valid');
+      return true;
+    } else {
+      console.log('❌ API key test failed:', response.status);
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ API key test error:', error);
+    return false;
+  }
+}
+
+// Enhanced error handling for API responses
+function handleTavusError(response: Response, responseText: string): TavusError {
+  const error: TavusError = {
+    message: 'Unknown error occurred'
+  };
+
+  if (response.status === 401) {
+    error.message = 'Invalid or expired API key. Please update your Tavus API key.';
+    error.isExpired = true;
+    error.isInvalid = true;
+  } else if (response.status === 403) {
+    error.message = 'Access denied. Your API key may not have sufficient permissions.';
+    error.isInvalid = true;
+  } else if (response.status === 429) {
+    error.message = 'Rate limit exceeded. Please wait before making more requests.';
+  } else if (response.status === 500) {
+    error.message = 'Tavus server error. Please try again later.';
+  } else {
+    try {
+      const errorData = JSON.parse(responseText);
+      error.message = errorData.message || `API error: ${response.status}`;
+    } catch {
+      error.message = `API error: ${response.status} - ${responseText}`;
+    }
+  }
+
+  return error;
+}
+
 export async function generateVideoWithTavus(
   title: string, 
-  description: string
+  description: string,
+  onApiKeyError?: (error: TavusError) => void
 ): Promise<string> {
   if (!TAVUS_API_KEY) {
     console.warn('Tavus API key not configured, returning mock video URL');
-    // Return a mock video URL for demonstration
     return 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
   }
 
   try {
     console.log('🎬 Starting Tavus video generation...');
     
-    // First, get available replicas to use a valid one
+    // First, test the API key
+    const isKeyValid = await testTavusApiKey();
+    if (!isKeyValid) {
+      const error: TavusError = {
+        message: 'Invalid or expired API key',
+        isExpired: true,
+        isInvalid: true
+      };
+      if (onApiKeyError) {
+        onApiKeyError(error);
+      }
+      throw error;
+    }
+
+    // Get available replicas to use a valid one
     const replicas = await listReplicas();
     const defaultReplica = replicas.find(r => r.status === 'ready') || replicas[0];
     
@@ -70,8 +163,15 @@ export async function generateVideoWithTavus(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Tavus API error response:', errorText);
-      throw new Error(`Tavus API error: ${response.status} - ${errorText}`);
+      const error = handleTavusError(response, errorText);
+      
+      if (error.isExpired || error.isInvalid) {
+        if (onApiKeyError) {
+          onApiKeyError(error);
+        }
+      }
+      
+      throw error;
     }
 
     const videoData: TavusVideoResponse = await response.json();
@@ -86,15 +186,20 @@ export async function generateVideoWithTavus(
     // If video is still generating, poll for completion
     if (videoData.video_id) {
       console.log('⏳ Video is generating, polling for completion...');
-      return await pollForVideoCompletion(videoData.video_id);
+      return await pollForVideoCompletion(videoData.video_id, onApiKeyError);
     }
 
     throw new Error('No video URL or ID returned from Tavus API');
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error generating video with Tavus:', error);
     
-    // Return a fallback video URL for demonstration
+    // If it's an API key error, don't fall back to demo video
+    if (error.isExpired || error.isInvalid) {
+      throw error;
+    }
+    
+    // For other errors, return a fallback video URL for demonstration
     console.log('🔄 Falling back to demo video due to error');
     return 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
   }
@@ -130,7 +235,11 @@ Good luck with your studies, and remember - you've got this! Let's begin our exp
   `.trim();
 }
 
-async function pollForVideoCompletion(videoId: string, maxAttempts: number = 60): Promise<string> {
+async function pollForVideoCompletion(
+  videoId: string, 
+  onApiKeyError?: (error: TavusError) => void,
+  maxAttempts: number = 60
+): Promise<string> {
   console.log(`🔄 Starting to poll for video completion (ID: ${videoId})`);
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -144,6 +253,16 @@ async function pollForVideoCompletion(videoId: string, maxAttempts: number = 60)
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        const error = handleTavusError(response, errorText);
+        
+        if (error.isExpired || error.isInvalid) {
+          if (onApiKeyError) {
+            onApiKeyError(error);
+          }
+          throw error;
+        }
+        
         throw new Error(`Failed to check video status: ${response.status}`);
       }
 
@@ -164,8 +283,13 @@ async function pollForVideoCompletion(videoId: string, maxAttempts: number = 60)
       console.log('⏱️ Waiting 10 seconds before next check...');
       await new Promise(resolve => setTimeout(resolve, 10000));
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(`❌ Polling attempt ${attempt + 1} failed:`, error);
+      
+      // If it's an API key error, propagate it immediately
+      if (error.isExpired || error.isInvalid) {
+        throw error;
+      }
       
       // If this is the last attempt, throw the error
       if (attempt === maxAttempts - 1) {

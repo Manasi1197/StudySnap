@@ -29,10 +29,12 @@ import {
   ChevronDown,
   ChevronUp,
   X,
-  Plus
+  Plus,
+  TestTube
 } from 'lucide-react';
 import { useQuizGenerator } from '../hooks/useQuizGenerator';
-import { generateVideoWithTavus } from '../lib/tavus';
+import { generateVideoWithTavus, testTavusApiKey, updateTavusApiKey, TavusError } from '../lib/tavus';
+import ApiKeyManager from './ApiKeyManager';
 import toast from 'react-hot-toast';
 
 interface QuizGeneratorProps {
@@ -47,9 +49,12 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [showSettings, setShowSettings] = useState(false);
   const [showNewQuizConfirmation, setShowNewQuizConfirmation] = useState(false);
+  const [showApiKeyManager, setShowApiKeyManager] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string>('');
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [videoGenerationProgress, setVideoGenerationProgress] = useState<string>('');
+  const [isTestingApiKey, setIsTestingApiKey] = useState(false);
   const [quizSettings, setQuizSettings] = useState({
     questionCount: 10,
     difficulty: 'mixed',
@@ -115,6 +120,26 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
     maxSize: 10 * 1024 * 1024 // 10MB
   });
 
+  // Test Tavus API Key
+  const handleTestApiKey = async () => {
+    setIsTestingApiKey(true);
+    try {
+      const isValid = await testTavusApiKey();
+      if (isValid) {
+        toast.success('✅ Tavus API key is working correctly!');
+      } else {
+        toast.error('❌ Tavus API key is invalid or expired');
+        setApiKeyError('Invalid or expired API key');
+        setShowApiKeyManager(true);
+      }
+    } catch (error) {
+      console.error('API key test error:', error);
+      toast.error('Failed to test API key');
+    } finally {
+      setIsTestingApiKey(false);
+    }
+  };
+
   // Generate quiz from content
   const handleGenerateQuiz = async () => {
     if (!hasMinimumContent) {
@@ -131,6 +156,22 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
       console.error('Quiz generation error:', error);
       setCurrentStep('upload');
     }
+  };
+
+  // Handle API key errors
+  const handleApiKeyError = (error: TavusError) => {
+    setApiKeyError(error.message);
+    setShowApiKeyManager(true);
+    setIsGeneratingVideo(false);
+    setVideoGenerationProgress('');
+  };
+
+  // Handle API key update
+  const handleApiKeyUpdated = (newApiKey: string) => {
+    updateTavusApiKey(newApiKey);
+    setApiKeyError('');
+    setShowApiKeyManager(false);
+    toast.success('API key updated successfully!');
   };
 
   // Navigate to video page with enhanced progress tracking
@@ -174,7 +215,8 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
 
       const videoUrl = await generateVideoWithTavus(
         generatedQuiz.title,
-        generatedQuiz.description
+        generatedQuiz.description,
+        handleApiKeyError
       );
       
       clearInterval(progressInterval);
@@ -191,10 +233,14 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
       }
       
       toast.success('🎬 AI video generated successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Video generation error:', error);
       setVideoGenerationProgress('');
-      toast.error('Failed to generate video. Please try again.');
+      
+      // Don't show error toast if it's an API key issue (handled by modal)
+      if (!error.isExpired && !error.isInvalid) {
+        toast.error('Failed to generate video. Please try again.');
+      }
     } finally {
       setIsGeneratingVideo(false);
     }
@@ -307,6 +353,18 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             <p className="text-gray-600">{generatedQuiz.description}</p>
           </div>
           <div className="flex items-center space-x-3">
+            <button
+              onClick={handleTestApiKey}
+              disabled={isTestingApiKey}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50"
+            >
+              {isTestingApiKey ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <TestTube className="w-4 h-4" />
+              )}
+              <span>Test API</span>
+            </button>
             <button
               onClick={() => setShowNewQuizConfirmation(true)}
               className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl font-medium whitespace-nowrap"
@@ -510,8 +568,14 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
           </div>
         </div>
 
-        {/* Confirmation Modal */}
+        {/* Modals */}
         {showNewQuizConfirmation && <NewQuizConfirmationModal />}
+        <ApiKeyManager
+          isOpen={showApiKeyManager}
+          onClose={() => setShowApiKeyManager(false)}
+          onApiKeyUpdated={handleApiKeyUpdated}
+          currentError={apiKeyError}
+        />
       </div>
     );
   }
@@ -525,7 +589,19 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             <h2 className="text-2xl font-bold text-gray-900">AI Quiz Generator</h2>
             <p className="text-gray-600">Transform your notes into interactive quizzes and flashcards</p>
           </div>
-          <div className="flex justify-end">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleTestApiKey}
+              disabled={isTestingApiKey}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50"
+            >
+              {isTestingApiKey ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <TestTube className="w-4 h-4" />
+              )}
+              <span>Test Tavus API</span>
+            </button>
             <button
               onClick={() => setShowSettings(!showSettings)}
               className="flex items-center space-x-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
@@ -873,8 +949,14 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
         </div>
       </div>
 
-      {/* Confirmation Modal */}
+      {/* Modals */}
       {showNewQuizConfirmation && <NewQuizConfirmationModal />}
+      <ApiKeyManager
+        isOpen={showApiKeyManager}
+        onClose={() => setShowApiKeyManager(false)}
+        onApiKeyUpdated={handleApiKeyUpdated}
+        currentError={apiKeyError}
+      />
     </div>
   );
 };

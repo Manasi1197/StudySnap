@@ -511,8 +511,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Header - Hide for Quiz Generator and sub-pages */}
-        {currentPage !== 'quiz-generator' && !isInSubPage && (
+        {/* Header - Show for all pages except Quiz Generator sub-pages */}
+        {!isInSubPage && (
           <header className="bg-white border-b border-gray-200 px-8 py-6">
             <div className="flex items-center justify-between">
               <div>
@@ -547,7 +547,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         )}
 
         {/* Dashboard Content */}
-        <main className={`flex-1 ${currentPage !== 'quiz-generator' && !isInSubPage ? 'p-8' : ''}`}>
+        <main className={`flex-1 ${!isInSubPage && currentPage !== 'quiz-generator' ? 'p-8' : ''}`}>
           {/* Conditional container width based on current page */}
           {currentPage === 'quiz-generator' || isInSubPage ? (
             // Full width for Quiz Generator and sub-pages

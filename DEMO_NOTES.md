@@ -1,4 +1,4 @@
-# Demo Notes for Tavus Video Generation Testing
+# Demo Notes for ElevenLabs Audio Generation Testing
 
 ## 📚 Sample Educational Content for Testing
 
@@ -67,7 +67,7 @@ This foundational knowledge of cellular biology is essential for understanding h
 
 ---
 
-## 🧪 Testing Instructions
+## 🎵 Testing Instructions
 
 ### Step 1: Upload Content
 1. Go to Quiz Generator
@@ -75,7 +75,7 @@ This foundational knowledge of cellular biology is essential for understanding h
 3. Verify content length indicator shows sufficient words
 
 ### Step 2: Test API Key
-1. Click "Test Tavus API" button
+1. Click "Test ElevenLabs API" button
 2. Verify API key validation works
 3. If key is invalid, test the API Key Manager modal
 
@@ -84,26 +84,51 @@ This foundational knowledge of cellular biology is essential for understanding h
 2. Wait for mock quiz generation
 3. Verify quiz overview page appears
 
-### Step 4: Test Video Generation
-1. Click "Generate Video" on the AI Video card
+### Step 4: Test Audio Generation
+1. Click "Generate Audio" on the AI Audio card
 2. Monitor progress indicators
-3. Verify video generation completes
-4. Test navigation to video player
+3. Verify audio generation completes
+4. Test navigation to audio player
 
-### Step 5: Test Navigation
-1. Test switching between Video, Flashcards, and Quiz
+### Step 5: Test Audio Player
+1. Verify audio controls work (play/pause, volume, speed)
+2. Test seeking through the audio
+3. Test download functionality
+4. Verify audio quality and content
+
+### Step 6: Test Navigation
+1. Test switching between Audio, Flashcards, and Quiz
 2. Verify data persistence across views
 3. Test back navigation to overview
 
 ### Expected Results:
 - ✅ API key validation works
-- ✅ Video generation initiates successfully  
+- ✅ Audio generation initiates successfully  
 - ✅ Progress tracking shows updates
-- ✅ Video URL is returned and playable
+- ✅ Audio URL is returned and playable
+- ✅ Audio player controls work properly
 - ✅ Navigation between views works seamlessly
 - ✅ Error handling for expired keys works
+- ✅ Audio content is educational and relevant
 
 ### Error Testing:
 1. Test with invalid API key
 2. Test network disconnection
 3. Test API rate limiting scenarios
+4. Test with very long content (character limits)
+
+### Audio Quality Testing:
+1. Verify audio is clear and understandable
+2. Check that educational content is properly structured
+3. Test different playback speeds
+4. Verify audio duration is appropriate (under 90 seconds recommended)
+
+### Features to Test:
+- ✅ Audio generation from quiz content
+- ✅ Educational script creation
+- ✅ Voice selection (automatic)
+- ✅ Audio player with full controls
+- ✅ Download functionality
+- ✅ Progress tracking during generation
+- ✅ Error handling and API key management
+- ✅ Integration with existing quiz flow

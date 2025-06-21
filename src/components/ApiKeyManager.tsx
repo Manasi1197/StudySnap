@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Key, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
-import { testTavusApiKey } from '../lib/tavus';
+import { testElevenLabsApiKey } from '../lib/elevenlabs';
 import toast from 'react-hot-toast';
 
 interface ApiKeyManagerProps {
@@ -35,7 +35,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     setValidationResult(null);
 
     try {
-      const isValid = await testTavusApiKey(newApiKey.trim());
+      const isValid = await testElevenLabsApiKey(newApiKey.trim());
       
       if (isValid) {
         setValidationResult({
@@ -44,7 +44,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
         });
         
         // Save the API key
-        localStorage.setItem('tavus_api_key', newApiKey.trim());
+        localStorage.setItem('elevenlabs_api_key', newApiKey.trim());
         onApiKeyUpdated(newApiKey.trim());
         
         toast.success('API key updated successfully!');
@@ -89,19 +89,19 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
         </button>
 
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Key className="w-8 h-8 text-red-600" />
+          <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Key className="w-8 h-8 text-purple-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Update Tavus API Key</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Update ElevenLabs API Key</h2>
           <p className="text-gray-600">
-            {currentError || 'Your current API key has expired or is invalid. Please enter a new one to continue generating videos.'}
+            {currentError || 'Your current API key has expired or is invalid. Please enter a new one to continue generating audio.'}
           </p>
         </div>
 
         <div className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              New Tavus API Key
+              New ElevenLabs API Key
             </label>
             <div className="relative">
               <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -110,7 +110,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                 value={newApiKey}
                 onChange={(e) => setNewApiKey(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                placeholder="Enter your Tavus API key"
+                placeholder="Enter your ElevenLabs API key"
                 disabled={isValidating}
               />
             </div>
@@ -140,11 +140,11 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
 
           {/* Instructions */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-medium text-blue-900 mb-2">How to get your Tavus API Key:</h4>
+            <h4 className="font-medium text-blue-900 mb-2">How to get your ElevenLabs API Key:</h4>
             <ol className="text-sm text-blue-800 space-y-1">
-              <li>1. Go to <a href="https://app.tavus.io" target="_blank" rel="noopener noreferrer" className="underline">app.tavus.io</a></li>
+              <li>1. Go to <a href="https://elevenlabs.io" target="_blank" rel="noopener noreferrer" className="underline">elevenlabs.io</a></li>
               <li>2. Sign in to your account</li>
-              <li>3. Navigate to Settings → API Keys</li>
+              <li>3. Navigate to Profile → API Keys</li>
               <li>4. Create a new API key or copy an existing one</li>
               <li>5. Paste it here and click "Validate & Save"</li>
             </ol>

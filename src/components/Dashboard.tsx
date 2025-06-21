@@ -33,7 +33,7 @@ import {
   LogOut
 } from 'lucide-react';
 import QuizGenerator from './QuizGenerator';
-import VideoPlayer from './VideoPlayer';
+import AudioPlayer from './AudioPlayer';
 import FlashcardsViewer from './FlashcardsViewer';
 import QuizTaker from './QuizTaker';
 import { useAuth } from '../hooks/useAuth';
@@ -67,7 +67,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     if (data && data.quiz) {
       setQuizGeneratorState({
         quiz: data.quiz,
-        videoUrl: data.videoUrl || null
+        audioUrl: data.audioUrl || null
       });
     }
     
@@ -82,7 +82,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     // The QuizGenerator will remain in 'review' state showing the overview
   };
 
-  const handleNavigateFromSubPage = (targetView: 'video' | 'flashcards' | 'take-quiz') => {
+  const handleNavigateFromSubPage = (targetView: 'audio' | 'flashcards' | 'take-quiz') => {
     if (!quizGeneratorState || !quizGeneratorState.quiz) {
       toast.error('Quiz data not available. Returning to overview.');
       handleBackToQuizOverview();
@@ -90,14 +90,14 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     }
 
     const quiz = quizGeneratorState.quiz;
-    const videoUrl = quizGeneratorState.videoUrl;
+    const audioUrl = quizGeneratorState.audioUrl;
 
     switch (targetView) {
-      case 'video':
-        setCurrentSubPage('video-player');
+      case 'audio':
+        setCurrentSubPage('audio-player');
         setSubPageData({
           quiz: quiz,
-          videoUrl: videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+          audioUrl: audioUrl || 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav',
           title: quiz.title,
           description: quiz.description
         });
@@ -107,7 +107,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         setCurrentSubPage('flashcards');
         setSubPageData({
           quiz: quiz,
-          videoUrl: videoUrl,
+          audioUrl: audioUrl,
           title: quiz.title,
           flashcards: quiz.flashcards
         });
@@ -117,7 +117,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         setCurrentSubPage('take-quiz');
         setSubPageData({
           quiz: quiz,
-          videoUrl: videoUrl
+          audioUrl: audioUrl
         });
         break;
     }
@@ -237,12 +237,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
   const renderMainContent = () => {
     // Handle sub-pages for quiz generator
     if (currentPage === 'quiz-generator') {
-      if (currentSubPage === 'video-player' && subPageData) {
+      if (currentSubPage === 'audio-player' && subPageData) {
         return (
-          <VideoPlayer
+          <AudioPlayer
             title={subPageData.title}
             description={subPageData.description}
-            videoUrl={subPageData.videoUrl}
+            audioUrl={subPageData.audioUrl}
             onBack={handleBackToQuizOverview}
             onNavigate={handleNavigateFromSubPage}
             quizData={subPageData.quiz}

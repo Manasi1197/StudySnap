@@ -14,7 +14,7 @@ import {
   Share2,
   Settings,
   Languages,
-  Video,
+  Volume2,
   ArrowLeft,
   ArrowRight,
   Clock,
@@ -34,7 +34,7 @@ import {
   Bug
 } from 'lucide-react';
 import { useQuizGenerator } from '../hooks/useQuizGenerator';
-import { generateVideoWithTavus, testTavusApiKey, updateTavusApiKey, TavusError, debugTavusIntegration } from '../lib/tavus';
+import { generateAudioWithElevenLabs, testElevenLabsApiKey, updateElevenLabsApiKey, debugElevenLabsIntegration } from '../lib/elevenlabs';
 import ApiKeyManager from './ApiKeyManager';
 import toast from 'react-hot-toast';
 
@@ -52,9 +52,9 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
   const [showNewQuizConfirmation, setShowNewQuizConfirmation] = useState(false);
   const [showApiKeyManager, setShowApiKeyManager] = useState(false);
   const [apiKeyError, setApiKeyError] = useState<string>('');
-  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
-  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
-  const [videoGenerationProgress, setVideoGenerationProgress] = useState<string>('');
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
+  const [audioGenerationProgress, setAudioGenerationProgress] = useState<string>('');
   const [isTestingApiKey, setIsTestingApiKey] = useState(false);
   const [showDebugInfo, setShowDebugInfo] = useState(false);
   const [quizSettings, setQuizSettings] = useState({
@@ -122,15 +122,15 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
     maxSize: 10 * 1024 * 1024 // 10MB
   });
 
-  // Test Tavus API Key
+  // Test ElevenLabs API Key
   const handleTestApiKey = async () => {
     setIsTestingApiKey(true);
     try {
-      const isValid = await testTavusApiKey();
+      const isValid = await testElevenLabsApiKey();
       if (isValid) {
-        toast.success('✅ Tavus API key is working correctly!');
+        toast.success('✅ ElevenLabs API key is working correctly!');
       } else {
-        toast.error('❌ Tavus API key is invalid or expired');
+        toast.error('❌ ElevenLabs API key is invalid or expired');
         setApiKeyError('Invalid or expired API key');
         setShowApiKeyManager(true);
       }
@@ -142,13 +142,13 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
     }
   };
 
-  // Debug Tavus Integration
-  const handleDebugTavus = async () => {
+  // Debug ElevenLabs Integration
+  const handleDebugElevenLabs = async () => {
     setShowDebugInfo(true);
-    toast.loading('Running Tavus integration debug...', { duration: 2000 });
+    toast.loading('Running ElevenLabs integration debug...', { duration: 2000 });
     
     try {
-      await debugTavusIntegration();
+      await debugElevenLabsIntegration();
       toast.success('Debug completed! Check console for detailed logs.');
     } catch (error) {
       console.error('Debug error:', error);
@@ -175,31 +175,31 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
   };
 
   // Handle API key errors
-  const handleApiKeyError = (error: TavusError) => {
+  const handleApiKeyError = (error: any) => {
     setApiKeyError(error.message);
     setShowApiKeyManager(true);
-    setIsGeneratingVideo(false);
-    setVideoGenerationProgress('');
+    setIsGeneratingAudio(false);
+    setAudioGenerationProgress('');
   };
 
   // Handle API key update
   const handleApiKeyUpdated = (newApiKey: string) => {
-    updateTavusApiKey(newApiKey);
+    updateElevenLabsApiKey(newApiKey);
     setApiKeyError('');
     setShowApiKeyManager(false);
     toast.success('API key updated successfully!');
   };
 
-  // Navigate to video page with enhanced progress tracking
-  const handleNavigateToVideo = async () => {
+  // Navigate to audio page with enhanced progress tracking
+  const handleNavigateToAudio = async () => {
     if (!generatedQuiz) return;
 
-    if (generatedVideoUrl) {
-      // Navigate to video page with existing video
+    if (generatedAudioUrl) {
+      // Navigate to audio page with existing audio
       if (onNavigate) {
-        onNavigate('video-player', {
+        onNavigate('audio-player', {
           quiz: generatedQuiz,
-          videoUrl: generatedVideoUrl,
+          audioUrl: generatedAudioUrl,
           title: generatedQuiz.title,
           description: generatedQuiz.description
         });
@@ -207,65 +207,67 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
       return;
     }
 
-    // Generate video with enhanced progress tracking
-    setIsGeneratingVideo(true);
-    setVideoGenerationProgress('Initializing video generation...');
+    // Generate audio and then navigate
+    setIsGeneratingAudio(true);
+    setAudioGenerationProgress('Initializing audio generation...');
     
     try {
       // Show progress updates
       const progressUpdates = [
-        'Connecting to Tavus API...',
+        'Connecting to ElevenLabs API...',
         'Validating API credentials...',
-        'Fetching available replicas...',
+        'Fetching available voices...',
         'Processing quiz content...',
         'Creating educational script...',
-        'Submitting video generation request...',
-        'Video is being generated...',
-        'Finalizing video production...'
+        'Submitting audio generation request...',
+        'Audio is being generated...',
+        'Finalizing audio production...'
       ];
 
       let progressIndex = 0;
       const progressInterval = setInterval(() => {
         if (progressIndex < progressUpdates.length - 1) {
           progressIndex++;
-          setVideoGenerationProgress(progressUpdates[progressIndex]);
+          setAudioGenerationProgress(progressUpdates[progressIndex]);
         }
-      }, 2000);
+      }, 1500);
 
-      console.log('🎬 Starting video generation process...');
+      console.log('🎵 Starting audio generation process...');
       
-      const videoUrl = await generateVideoWithTavus(
+      const audioUrl = await generateAudioWithElevenLabs(
         generatedQuiz.title,
         generatedQuiz.description,
+        generatedQuiz.questions,
+        generatedQuiz.flashcards,
         handleApiKeyError
       );
       
       clearInterval(progressInterval);
-      setGeneratedVideoUrl(videoUrl);
-      setVideoGenerationProgress('Video generation completed!');
+      setGeneratedAudioUrl(audioUrl);
+      setAudioGenerationProgress('Audio generation completed!');
       
-      console.log('✅ Video generation successful:', videoUrl);
+      console.log('✅ Audio generation successful:', audioUrl);
       
       if (onNavigate) {
-        onNavigate('video-player', {
+        onNavigate('audio-player', {
           quiz: generatedQuiz,
-          videoUrl: videoUrl,
+          audioUrl: audioUrl,
           title: generatedQuiz.title,
           description: generatedQuiz.description
         });
       }
       
-      toast.success('🎬 AI video generated successfully!');
+      toast.success('🎵 AI audio generated successfully!');
     } catch (error: any) {
-      console.error('❌ Video generation error:', error);
-      setVideoGenerationProgress('');
+      console.error('❌ Audio generation error:', error);
+      setAudioGenerationProgress('');
       
       // Don't show error toast if it's an API key issue (handled by modal)
       if (!error.isExpired && !error.isInvalid) {
-        toast.error(`Failed to generate video: ${error.message || 'Unknown error'}`);
+        toast.error(`Failed to generate audio: ${error.message || 'Unknown error'}`);
       }
     } finally {
-      setIsGeneratingVideo(false);
+      setIsGeneratingAudio(false);
     }
   };
 
@@ -277,7 +279,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
       quiz: generatedQuiz,
       title: generatedQuiz.title,
       flashcards: generatedQuiz.flashcards,
-      videoUrl: generatedVideoUrl
+      audioUrl: generatedAudioUrl
     });
   };
 
@@ -287,7 +289,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
     
     onNavigate('take-quiz', {
       quiz: generatedQuiz,
-      videoUrl: generatedVideoUrl
+      audioUrl: generatedAudioUrl
     });
   };
 
@@ -305,8 +307,8 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
 
   const resetGenerator = () => {
     setCurrentStep('upload');
-    setGeneratedVideoUrl(null);
-    setVideoGenerationProgress('');
+    setGeneratedAudioUrl(null);
+    setAudioGenerationProgress('');
     resetQuizGeneratorHook();
   };
 
@@ -389,7 +391,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
               <span>Test API</span>
             </button>
             <button
-              onClick={handleDebugTavus}
+              onClick={handleDebugElevenLabs}
               className="flex items-center space-x-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors"
             >
               <Bug className="w-4 h-4" />
@@ -407,30 +409,30 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
 
         {/* Enhanced Action Cards with Fixed Alignment */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* AI Video Card */}
-          <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl p-8 border border-red-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
+          {/* AI Audio Card */}
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-8 border border-purple-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
             <div className="flex items-center space-x-4 mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
-                <Video className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
+                <Volume2 className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-gray-900">AI Video</h3>
-                <p className="text-gray-600">Watch AI-generated explanation</p>
+                <h3 className="text-xl font-bold text-gray-900">AI Audio</h3>
+                <p className="text-gray-600">Listen to AI-generated revision</p>
               </div>
             </div>
             
             <div className="mb-6 flex-grow">
               <p className="text-gray-700 text-sm leading-relaxed">
-                {generatedVideoUrl ? 'Video ready to watch' : 'Topic overview video'}
+                {generatedAudioUrl ? 'Audio ready to listen' : 'Topic overview audio guide'}
               </p>
-              {isGeneratingVideo && videoGenerationProgress && (
+              {isGeneratingAudio && audioGenerationProgress && (
                 <div className="mt-4">
-                  <div className="flex items-center space-x-2 text-sm text-orange-600">
+                  <div className="flex items-center space-x-2 text-sm text-purple-600">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{videoGenerationProgress}</span>
+                    <span>{audioGenerationProgress}</span>
                   </div>
-                  <div className="w-full bg-orange-200 rounded-full h-2 mt-2">
-                    <div className="bg-orange-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                  <div className="w-full bg-purple-200 rounded-full h-2 mt-2">
+                    <div className="bg-purple-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
                   </div>
                 </div>
               )}
@@ -438,24 +440,24 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
 
             <div className="mt-auto">
               <button
-                onClick={handleNavigateToVideo}
-                disabled={isGeneratingVideo}
-                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleNavigateToAudio}
+                disabled={isGeneratingAudio}
+                className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-indigo-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isGeneratingVideo ? (
+                {isGeneratingAudio ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Generating...</span>
                   </>
-                ) : generatedVideoUrl ? (
+                ) : generatedAudioUrl ? (
                   <>
-                    <Video className="w-5 h-5" />
-                    <span>Watch Video</span>
+                    <Volume2 className="w-5 h-5" />
+                    <span>Listen Audio</span>
                   </>
                 ) : (
                   <>
-                    <Video className="w-5 h-5" />
-                    <span>Generate Video</span>
+                    <Volume2 className="w-5 h-5" />
+                    <span>Generate Audio</span>
                   </>
                 )}
               </button>
@@ -492,9 +494,9 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
           </div>
 
           {/* Take Quiz Card */}
-          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 border border-purple-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-8 border border-green-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
             <div className="flex items-center space-x-4 mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
                 <Play className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -512,7 +514,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             <div className="mt-auto">
               <button 
                 onClick={handleStartQuiz}
-                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
               >
                 <Play className="w-5 h-5" />
                 <span>Start Quiz</span>
@@ -557,10 +559,10 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
               </div>
               <div className="bg-white rounded-xl p-6 border border-gray-200">
                 <div className="flex items-center space-x-3">
-                  <Zap className="w-5 h-5 text-orange-500" />
+                  <Volume2 className="w-5 h-5 text-purple-500" />
                   <div>
-                    <p className="text-sm text-gray-500">Difficulty</p>
-                    <p className="font-bold text-gray-900">Mixed</p>
+                    <p className="text-sm text-gray-500">Audio Guide</p>
+                    <p className="font-bold text-gray-900">{generatedAudioUrl ? 'Ready' : 'Generate'}</p>
                   </div>
                 </div>
               </div>
@@ -570,28 +572,28 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
               <h4 className="font-bold text-blue-900 mb-4 flex items-center">
                 <AlertCircle className="w-5 h-5 mr-2" />
-                Quiz Guidelines
+                Study Guidelines
               </h4>
               <ul className="space-y-2 text-blue-800 text-sm">
                 <li className="flex items-start">
                   <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                  All questions must be answered before proceeding to the next question
+                  Start with the audio guide for a comprehensive overview of the topic
                 </li>
                 <li className="flex items-start">
                   <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                  There are no negative markings - take your time to think through each answer
+                  Review the flashcards to familiarize yourself with key concepts
                 </li>
                 <li className="flex items-start">
                   <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                  Review the flashcards first to familiarize yourself with key concepts
-                </li>
-                <li className="flex items-start">
-                  <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                  Watch the AI video for a comprehensive overview of the topic
+                  Take your time with each question - there are no negative markings
                 </li>
                 <li className="flex items-start">
                   <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
                   Questions include multiple choice, true/false, and fill-in-the-blank formats
+                </li>
+                <li className="flex items-start">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                  Use the audio guide for revision and reinforcement of learning
                 </li>
               </ul>
             </div>
@@ -617,7 +619,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex-1">
             <h2 className="text-2xl font-bold text-gray-900">AI Quiz Generator</h2>
-            <p className="text-gray-600">Transform your notes into interactive quizzes and flashcards</p>
+            <p className="text-gray-600">Transform your notes into interactive quizzes, flashcards, and audio guides</p>
           </div>
           <div className="flex items-center space-x-3">
             <button
@@ -630,10 +632,10 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
               ) : (
                 <TestTube className="w-4 h-4" />
               )}
-              <span>Test Tavus API</span>
+              <span>Test ElevenLabs API</span>
             </button>
             <button
-              onClick={handleDebugTavus}
+              onClick={handleDebugElevenLabs}
               className="flex items-center space-x-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors"
             >
               <Bug className="w-4 h-4" />
@@ -941,10 +943,10 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
                   <span className="text-gray-700">Interactive flashcards</span>
                 </div>
                 <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Video className="w-5 h-5 text-white" />
+                  <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Volume2 className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-gray-700">AI video explanations</span>
+                  <span className="text-gray-700">AI audio revision guide</span>
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, RotateCcw, Shuffle, BookOpen, ChevronLeft, ChevronRight, Play, Video } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCcw, Shuffle, BookOpen, ChevronLeft, ChevronRight, Play, Volume2 } from 'lucide-react';
 
 interface Flashcard {
   id: string;
@@ -12,7 +12,7 @@ interface FlashcardsViewerProps {
   title: string;
   flashcards: Flashcard[];
   onBack: () => void;
-  onNavigate?: (targetView: 'video' | 'flashcards' | 'take-quiz') => void;
+  onNavigate?: (targetView: 'audio' | 'flashcards' | 'take-quiz') => void;
   quizData?: any;
 }
 
@@ -65,9 +65,9 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
     setStudiedCards(new Set());
   };
 
-  const handleNavigateToVideo = () => {
+  const handleNavigateToAudio = () => {
     if (onNavigate) {
-      onNavigate('video');
+      onNavigate('audio');
     }
   };
 
@@ -254,13 +254,13 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
               <h3 className="font-bold text-gray-900 mb-4">Next Steps</h3>
               <div className="space-y-3">
                 <button 
-                  onClick={handleNavigateToVideo}
+                  onClick={handleNavigateToAudio}
                   className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
                 >
-                  <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
-                    <Video className="w-4 h-4 text-white" />
+                  <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+                    <Volume2 className="w-4 h-4 text-white" />
                   </div>
-                  <span className="font-medium text-gray-900">Watch Video</span>
+                  <span className="font-medium text-gray-900">Listen Audio</span>
                 </button>
                 <button 
                   onClick={handleNavigateToQuiz}

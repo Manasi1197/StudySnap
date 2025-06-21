@@ -291,7 +291,7 @@ const QuizGenerator: React.FC = () => {
 
   if (currentStep === 'review' && generatedQuiz) {
     return (
-      <div className="space-y-8">
+      <div className="p-8 space-y-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -494,7 +494,7 @@ const QuizGenerator: React.FC = () => {
 
   return (
     <div className="relative">
-      <div className="space-y-8 pb-32">
+      <div className="p-8 space-y-8 pb-32">
         {/* Header with Settings Button */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex-1">
@@ -822,7 +822,7 @@ const QuizGenerator: React.FC = () => {
       </div>
 
       {/* Fixed Generate Button at Bottom */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-6 z-10">
+      <div className="fixed bottom-0 left-64 right-0 bg-white border-t border-gray-200 p-6 z-10">
         <div className="max-w-full">
           <button
             onClick={handleGenerateQuiz}
@@ -838,7 +838,7 @@ const QuizGenerator: React.FC = () => {
               <>
                 <Wand2 className="w-5 h-5" />
                 <span>Generate Quiz with AI</span>
-              </>
+              </button>
             )}
           </button>
           {!hasMinimumContent && (

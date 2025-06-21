@@ -364,79 +364,77 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar - Hide for quiz generator */}
-      {currentPage !== 'quiz-generator' && (
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-          {/* Logo */}
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-gray-900">StudyHub</span>
+      {/* Sidebar - Always visible */}
+      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+        {/* Logo */}
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-white" />
             </div>
-          </div>
-
-          {/* Navigation */}
-          <div className="flex-1 py-6">
-            <nav className="px-4 space-y-1">
-              {sidebarItems.map((item, index) => {
-                const Icon = item.icon;
-                const isActive = currentPage === item.page;
-                return (
-                  <button
-                    key={index}
-                    onClick={() => handleNavigation(item.page)}
-                    className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-gray-900 text-white'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-
-          {/* Bottom Navigation */}
-          <div className="p-4 border-t border-gray-200">
-            <nav className="space-y-1">
-              {bottomSidebarItems.map((item, index) => {
-                const Icon = item.icon;
-                const isActive = currentPage === item.page;
-                return (
-                  <button
-                    key={index}
-                    onClick={() => handleNavigation(item.page)}
-                    className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-gray-900 text-white'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-              <button
-                onClick={handleSignOut}
-                className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
-              >
-                <LogOut className="w-5 h-5" />
-                <span>Sign Out</span>
-              </button>
-            </nav>
+            <span className="text-xl font-bold text-gray-900">StudyHub</span>
           </div>
         </div>
-      )}
+
+        {/* Navigation */}
+        <div className="flex-1 py-6">
+          <nav className="px-4 space-y-1">
+            {sidebarItems.map((item, index) => {
+              const Icon = item.icon;
+              const isActive = currentPage === item.page;
+              return (
+                <button
+                  key={index}
+                  onClick={() => handleNavigation(item.page)}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-gray-900 text-white'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Bottom Navigation */}
+        <div className="p-4 border-t border-gray-200">
+          <nav className="space-y-1">
+            {bottomSidebarItems.map((item, index) => {
+              const Icon = item.icon;
+              const isActive = currentPage === item.page;
+              return (
+                <button
+                  key={index}
+                  onClick={() => handleNavigation(item.page)}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-gray-900 text-white'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
+            >
+              <LogOut className="w-5 h-5" />
+              <span>Sign Out</span>
+            </button>
+          </nav>
+        </div>
+      </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Header - Hide for quiz generator */}
+        {/* Header - Hide only for quiz generator */}
         {currentPage !== 'quiz-generator' && (
           <header className="bg-white border-b border-gray-200 px-8 py-6">
             <div className="flex items-center justify-between">

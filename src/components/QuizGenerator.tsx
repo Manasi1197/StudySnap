@@ -31,403 +31,16 @@ import {
   X
 } from 'lucide-react';
 import { useQuizGenerator } from '../hooks/useQuizGenerator';
+import { generateVideoWithTavus } from '../lib/tavus';
 import toast from 'react-hot-toast';
 
-// Confirmation Modal Component
-const ConfirmationModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  title: string;
-  message: string;
-  confirmText: string;
-  cancelText: string;
-}> = ({ isOpen, onClose, onConfirm, title, message, confirmText, cancelText }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-8 w-full max-w-md relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          <X className="w-6 h-6" />
-        </button>
-
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8 text-orange-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">{title}</h2>
-          <p className="text-gray-600">{message}</p>
-        </div>
-
-        <div className="flex space-x-4">
-          <button
-            onClick={onClose}
-            className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-          >
-            {cancelText}
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
-          >
-            {confirmText}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Flashcard Component with 3D flip animation
-const FlashcardComponent: React.FC<{
-  card: { front: string; back: string; topic: string };
-  index: number;
-}> = ({ card, index }) => {
-  const [isFlipped, setIsFlipped] = useState(false);
-
-  return (
-    <div 
-      className="perspective-1000 h-48 cursor-pointer"
-      onClick={() => setIsFlipped(!isFlipped)}
-    >
-      <div className={`relative w-full h-full transform-style-preserve-3d transition-transform duration-700 ${isFlipped ? 'rotate-y-180' : ''}`}>
-        {/* Front of card */}
-        <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl p-6 flex flex-col justify-center items-center text-white shadow-lg">
-          <div className="text-center">
-            <p className="font-semibold text-lg mb-2">{card.front}</p>
-            <p className="text-purple-100 text-sm">Click to reveal answer</p>
-          </div>
-        </div>
-        
-        {/* Back of card */}
-        <div className="absolute inset-0 backface-hidden rotate-y-180 bg-gradient-to-br from-blue-500 to-teal-500 rounded-xl p-6 flex flex-col justify-center items-center text-white shadow-lg">
-          <div className="text-center">
-            <p className="font-medium text-base mb-3">{card.back}</p>
-            <span className="inline-block bg-white/20 text-blue-100 px-3 py-1 rounded-full text-xs font-medium">
-              {card.topic}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Quiz Taking Component
-const QuizTaker: React.FC<{
-  quiz: any;
-  onComplete: (results: any) => void;
-  onBack: () => void;
-}> = ({ quiz, onComplete, onBack }) => {
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<{ [key: string]: any }>({});
-  const [showResults, setShowResults] = useState(false);
-  const [results, setResults] = useState<any>(null);
-
-  const currentQuestion = quiz.questions[currentQuestionIndex];
-  const isLastQuestion = currentQuestionIndex === quiz.questions.length - 1;
-  const hasAnswered = answers[currentQuestion.id] !== undefined;
-
-  const handleAnswer = (answer: any) => {
-    setAnswers(prev => ({
-      ...prev,
-      [currentQuestion.id]: answer
-    }));
-  };
-
-  const handleNext = () => {
-    if (!hasAnswered) {
-      toast.error('Please answer the question before proceeding');
-      return;
-    }
-
-    if (isLastQuestion) {
-      // Calculate results
-      const score = quiz.questions.reduce((total: number, question: any) => {
-        const userAnswer = answers[question.id];
-        const isCorrect = question.type === 'true-false' 
-          ? userAnswer === question.correctAnswer
-          : question.type === 'multiple-choice'
-          ? userAnswer === question.correctAnswer
-          : userAnswer?.toLowerCase().trim() === question.correctAnswer.toLowerCase().trim();
-        
-        return total + (isCorrect ? 1 : 0);
-      }, 0);
-
-      const quizResults = {
-        score,
-        totalQuestions: quiz.questions.length,
-        percentage: Math.round((score / quiz.questions.length) * 100),
-        answers,
-        wrongAnswers: quiz.questions.filter((q: any) => {
-          const userAnswer = answers[q.id];
-          const isCorrect = q.type === 'true-false' 
-            ? userAnswer === q.correctAnswer
-            : q.type === 'multiple-choice'
-            ? userAnswer === q.correctAnswer
-            : userAnswer?.toLowerCase().trim() === q.correctAnswer.toLowerCase().trim();
-          return !isCorrect;
-        })
-      };
-
-      setResults(quizResults);
-      setShowResults(true);
-    } else {
-      setCurrentQuestionIndex(prev => prev + 1);
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
-    }
-  };
-
-  if (showResults && results) {
-    return (
-      <div className="space-y-8">
-        {/* Results Header */}
-        <div className="text-center">
-          <div className="w-24 h-24 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Trophy className="w-12 h-12 text-white" />
-          </div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Quiz Complete!</h2>
-          <p className="text-xl text-gray-600">
-            You scored {results.score} out of {results.totalQuestions} ({results.percentage}%)
-          </p>
-        </div>
-
-        {/* Score Card */}
-        <div className="bg-white rounded-xl p-8 border border-gray-200 text-center">
-          <div className="grid grid-cols-3 gap-6">
-            <div>
-              <div className="text-3xl font-bold text-green-600">{results.score}</div>
-              <div className="text-sm text-gray-500">Correct</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-red-600">{results.totalQuestions - results.score}</div>
-              <div className="text-sm text-gray-500">Incorrect</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-blue-600">{results.percentage}%</div>
-              <div className="text-sm text-gray-500">Score</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Wrong Answers with AI Explanations */}
-        {results.wrongAnswers.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900">Review Incorrect Answers</h3>
-              <p className="text-gray-600">AI explanations to help you learn</p>
-            </div>
-            <div className="p-6 space-y-6">
-              {results.wrongAnswers.map((question: any, index: number) => (
-                <div key={question.id} className="border border-red-100 rounded-lg p-6 bg-red-50">
-                  <h4 className="font-medium text-gray-900 mb-3">
-                    {question.question}
-                  </h4>
-                  
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center space-x-2">
-                      <XCircle className="w-4 h-4 text-red-500" />
-                      <span className="text-sm text-red-700">
-                        Your answer: {
-                          question.type === 'multiple-choice' 
-                            ? question.options[answers[question.id]]
-                            : answers[question.id]?.toString()
-                        }
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                      <span className="text-sm text-green-700">
-                        Correct answer: {
-                          question.type === 'multiple-choice' 
-                            ? question.options[question.correctAnswer]
-                            : question.correctAnswer.toString()
-                        }
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-start space-x-3">
-                      <Brain className="w-5 h-5 text-blue-600 mt-0.5" />
-                      <div>
-                        <h5 className="font-medium text-blue-900 mb-1">AI Explanation</h5>
-                        <p className="text-sm text-blue-800">{question.explanation}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex justify-center space-x-4">
-          <button
-            onClick={onBack}
-            className="px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Back to Overview
-          </button>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
-          >
-            Take Another Quiz
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-8">
-      {/* Progress Bar */}
-      <div className="bg-white rounded-xl p-6 border border-gray-200">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-900">Question {currentQuestionIndex + 1} of {quiz.questions.length}</h3>
-          <span className="text-sm text-gray-500">
-            {Math.round(((currentQuestionIndex + 1) / quiz.questions.length) * 100)}% Complete
-          </span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <div 
-            className="bg-purple-500 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${((currentQuestionIndex + 1) / quiz.questions.length) * 100}%` }}
-          ></div>
-        </div>
-      </div>
-
-      {/* Question Card */}
-      <div className="bg-white rounded-xl p-8 border border-gray-200">
-        <div className="mb-6">
-          <div className="flex items-center space-x-2 mb-4">
-            <span className="bg-purple-100 text-purple-600 px-3 py-1 rounded-full text-xs font-medium">
-              {currentQuestion.type.replace('-', ' ').toUpperCase()}
-            </span>
-            <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-medium">
-              {currentQuestion.difficulty.toUpperCase()}
-            </span>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">
-            {currentQuestion.question}
-          </h2>
-        </div>
-
-        {/* Answer Options */}
-        <div className="space-y-4 mb-8">
-          {currentQuestion.type === 'multiple-choice' && (
-            <div className="space-y-3">
-              {currentQuestion.options.map((option: string, index: number) => (
-                <button
-                  key={index}
-                  onClick={() => handleAnswer(index)}
-                  className={`w-full text-left p-4 rounded-lg border-2 transition-all duration-200 ${
-                    answers[currentQuestion.id] === index
-                      ? 'border-purple-500 bg-purple-50 text-purple-700'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                      answers[currentQuestion.id] === index
-                        ? 'border-purple-500 bg-purple-500'
-                        : 'border-gray-300'
-                    }`}>
-                      {answers[currentQuestion.id] === index && (
-                        <div className="w-2 h-2 bg-white rounded-full"></div>
-                      )}
-                    </div>
-                    <span className="font-medium">{String.fromCharCode(65 + index)}.</span>
-                    <span>{option}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {currentQuestion.type === 'true-false' && (
-            <div className="grid grid-cols-2 gap-4">
-              {[true, false].map((value) => (
-                <button
-                  key={value.toString()}
-                  onClick={() => handleAnswer(value)}
-                  className={`p-6 rounded-lg border-2 transition-all duration-200 ${
-                    answers[currentQuestion.id] === value
-                      ? 'border-purple-500 bg-purple-50 text-purple-700'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="text-center">
-                    <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center mx-auto mb-2 ${
-                      answers[currentQuestion.id] === value
-                        ? 'border-purple-500 bg-purple-500'
-                        : 'border-gray-300'
-                    }`}>
-                      {answers[currentQuestion.id] === value && (
-                        <CheckCircle className="w-4 h-4 text-white" />
-                      )}
-                    </div>
-                    <span className="font-bold text-lg">{value ? 'True' : 'False'}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {currentQuestion.type === 'fill-blank' && (
-            <div>
-              <input
-                type="text"
-                value={answers[currentQuestion.id] || ''}
-                onChange={(e) => handleAnswer(e.target.value)}
-                placeholder="Type your answer here..."
-                className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none text-lg"
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Navigation Buttons */}
-        <div className="flex justify-between">
-          <button
-            onClick={handlePrevious}
-            disabled={currentQuestionIndex === 0}
-            className="flex items-center space-x-2 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Previous</span>
-          </button>
-
-          <button
-            onClick={handleNext}
-            disabled={!hasAnswered}
-            className="flex items-center space-x-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span>{isLastQuestion ? 'Finish Quiz' : 'Next Question'}</span>
-            {!isLastQuestion && <ArrowRight className="w-4 h-4" />}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const QuizGenerator: React.FC = () => {
-  const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'review' | 'flashcards' | 'quiz'>('upload');
+  const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'review'>('upload');
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [showSettings, setShowSettings] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showNewQuizConfirmation, setShowNewQuizConfirmation] = useState(false);
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [quizSettings, setQuizSettings] = useState({
     questionCount: 10,
     difficulty: 'mixed',
@@ -448,6 +61,20 @@ const QuizGenerator: React.FC = () => {
     removeFile,
     reset
   } = useQuizGenerator();
+
+  // Calculate total content length for minimum word validation
+  const getTotalContentLength = () => {
+    const allContent = [
+      textInput,
+      ...uploadedFiles.map(f => f.content)
+    ].filter(Boolean).join(' ');
+    
+    return allContent.trim().split(/\s+/).length;
+  };
+
+  const MIN_WORDS_REQUIRED = 50; // Minimum 50 words required
+  const totalWords = getTotalContentLength();
+  const hasMinimumContent = totalWords >= MIN_WORDS_REQUIRED;
 
   // File upload handling
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -481,8 +108,8 @@ const QuizGenerator: React.FC = () => {
 
   // Generate quiz from content
   const handleGenerateQuiz = async () => {
-    if (uploadedFiles.length === 0 && !textInput.trim()) {
-      toast.error('Please upload files or enter text to generate a quiz');
+    if (!hasMinimumContent) {
+      toast.error(`Please provide at least ${MIN_WORDS_REQUIRED} words of content to generate a meaningful quiz. Current: ${totalWords} words.`);
       return;
     }
 
@@ -497,27 +124,82 @@ const QuizGenerator: React.FC = () => {
     }
   };
 
-  const generateTopicVideo = async () => {
+  // Generate AI video explanation for the entire quiz topic
+  const handleGenerateVideo = async () => {
     if (!generatedQuiz) return;
-    
-    toast.success('Generating AI video explanation for the topic...');
-    // This would integrate with Tavus API for video generation
-    console.log('Generating topic video for:', generatedQuiz.title);
-  };
 
-  const resetGenerator = () => {
-    if (uploadedFiles.length > 0 || textInput.trim() || generatedQuiz) {
-      setShowConfirmModal(true);
-    } else {
-      performReset();
+    setIsGeneratingVideo(true);
+    try {
+      const videoUrl = await generateVideoWithTavus(
+        generatedQuiz.title,
+        generatedQuiz.description
+      );
+      setGeneratedVideoUrl(videoUrl);
+      toast.success('AI video generated successfully!');
+    } catch (error) {
+      console.error('Video generation error:', error);
+      toast.error('Failed to generate video. Please try again.');
+    } finally {
+      setIsGeneratingVideo(false);
     }
   };
 
-  const performReset = () => {
-    setCurrentStep('upload');
-    reset();
-    setShowConfirmModal(false);
+  const translateContent = async (targetLanguage: string) => {
+    console.log('Translating content to:', targetLanguage);
+    setSelectedLanguage(targetLanguage);
+    setQuizSettings(prev => ({ ...prev, language: targetLanguage }));
+    toast.success(`Language changed to ${targetLanguage}`);
   };
+
+  const handleNewQuizConfirmation = () => {
+    setShowNewQuizConfirmation(false);
+    resetGenerator();
+  };
+
+  const resetGenerator = () => {
+    setCurrentStep('upload');
+    setGeneratedVideoUrl(null);
+    reset();
+  };
+
+  // New Quiz Confirmation Modal
+  const NewQuizConfirmationModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-md relative">
+        <button
+          onClick={() => setShowNewQuizConfirmation(false)}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-orange-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Start New Quiz?</h2>
+          <p className="text-gray-600">
+            This will clear your current progress and start fresh. Are you sure you want to continue?
+          </p>
+        </div>
+
+        <div className="flex space-x-4">
+          <button
+            onClick={() => setShowNewQuizConfirmation(false)}
+            className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleNewQuizConfirmation}
+            className="flex-1 px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
+          >
+            Start New Quiz
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   if (currentStep === 'processing') {
     return (
@@ -536,67 +218,6 @@ const QuizGenerator: React.FC = () => {
     );
   }
 
-  if (currentStep === 'flashcards' && generatedQuiz) {
-    return (
-      <div className="space-y-8">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Study Flashcards</h2>
-            <p className="text-gray-600">Review key concepts before taking the quiz</p>
-          </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setCurrentStep('review')}
-              className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back</span>
-            </button>
-            <button
-              onClick={() => setCurrentStep('quiz')}
-              className="flex items-center space-x-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
-            >
-              <Play className="w-4 h-4" />
-              <span>Start Quiz</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Flashcards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {generatedQuiz.flashcards.map((card, index) => (
-            <FlashcardComponent key={card.id} card={card} index={index} />
-          ))}
-        </div>
-
-        {/* Study Tips */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
-          <h3 className="font-bold text-blue-900 mb-3">Study Tips</h3>
-          <ul className="text-blue-800 space-y-2 text-sm">
-            <li>• Click each flashcard to reveal the answer</li>
-            <li>• Review all cards before starting the quiz</li>
-            <li>• Focus on concepts you find challenging</li>
-            <li>• Take your time to understand each concept thoroughly</li>
-          </ul>
-        </div>
-      </div>
-    );
-  }
-
-  if (currentStep === 'quiz' && generatedQuiz) {
-    return (
-      <QuizTaker
-        quiz={generatedQuiz}
-        onComplete={(results) => {
-          console.log('Quiz completed:', results);
-          setCurrentStep('review');
-        }}
-        onBack={() => setCurrentStep('review')}
-      />
-    );
-  }
-
   if (currentStep === 'review' && generatedQuiz) {
     return (
       <div className="space-y-8">
@@ -608,52 +229,16 @@ const QuizGenerator: React.FC = () => {
           </div>
           <div className="flex items-center space-x-3">
             <button
-              onClick={resetGenerator}
+              onClick={() => setShowNewQuizConfirmation(true)}
               className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>New Quiz</span>
             </button>
-          </div>
-        </div>
-
-        {/* Quiz Info */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-3">
-              <Target className="w-5 h-5 text-purple-500" />
-              <div>
-                <p className="text-sm text-gray-500">Questions</p>
-                <p className="font-bold text-gray-900">{generatedQuiz.questions.length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-3">
-              <Clock className="w-5 h-5 text-blue-500" />
-              <div>
-                <p className="text-sm text-gray-500">Est. Time</p>
-                <p className="font-bold text-gray-900">{generatedQuiz.estimatedTime} min</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-3">
-              <BookOpen className="w-5 h-5 text-green-500" />
-              <div>
-                <p className="text-sm text-gray-500">Flashcards</p>
-                <p className="font-bold text-gray-900">{generatedQuiz.flashcards.length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-            <div className="flex items-center space-x-3">
-              <Zap className="w-5 h-5 text-orange-500" />
-              <div>
-                <p className="text-sm text-gray-500">Difficulty</p>
-                <p className="font-bold text-gray-900">Mixed</p>
-              </div>
-            </div>
+            <button className="flex items-center space-x-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors">
+              <Play className="w-4 h-4" />
+              <span>Start Quiz</span>
+            </button>
           </div>
         </div>
 
@@ -661,168 +246,192 @@ const QuizGenerator: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* AI Video Card */}
           <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl p-8 border border-red-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-            <div className="flex items-center justify-center mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-orange-500 rounded-2xl flex items-center justify-center shadow-lg">
-                <Video className="w-8 h-8 text-white" />
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                <Video className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">AI Video</h3>
+                <p className="text-gray-600">Watch AI-generated explanation</p>
               </div>
             </div>
             
-            <div className="text-center mb-8">
-              <h3 className="text-xl font-bold text-gray-900 mb-3">AI Video</h3>
-              <p className="text-gray-600 leading-relaxed">
-                Watch AI-generated explanation
+            <div className="mb-6">
+              <p className="text-gray-700 text-sm leading-relaxed">
+                Topic overview video
               </p>
             </div>
 
-            <div className="space-y-4">
-              <div className="text-center text-sm text-gray-500">
-                Topic overview video
+            {generatedVideoUrl ? (
+              <div className="space-y-4">
+                <div className="bg-white rounded-lg p-4 border border-red-200">
+                  <video 
+                    src={generatedVideoUrl} 
+                    controls 
+                    className="w-full rounded-lg"
+                    poster="/api/placeholder/300/200"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
+                <button
+                  onClick={handleGenerateVideo}
+                  disabled={isGeneratingVideo}
+                  className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                  <span>Regenerate</span>
+                </button>
               </div>
-              
+            ) : (
               <button
-                onClick={generateTopicVideo}
-                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                onClick={handleGenerateVideo}
+                disabled={isGeneratingVideo}
+                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Video className="w-5 h-5" />
-                <span>Generate</span>
+                {isGeneratingVideo ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Video className="w-5 h-5" />
+                    <span>Generate</span>
+                  </>
+                )}
               </button>
-            </div>
+            )}
           </div>
 
           {/* Study Flashcards Card */}
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 border border-blue-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-            <div className="flex items-center justify-center mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center shadow-lg">
-                <BookOpen className="w-8 h-8 text-white" />
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
+                <BookOpen className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Study Flashcards</h3>
+                <p className="text-gray-600">Review key concepts first</p>
               </div>
             </div>
             
-            <div className="text-center mb-8">
-              <h3 className="text-xl font-bold text-gray-900 mb-3">Study Flashcards</h3>
-              <p className="text-gray-600 leading-relaxed">
-                Review key concepts first
+            <div className="mb-6">
+              <p className="text-gray-700 text-sm leading-relaxed">
+                {generatedQuiz.flashcards.length} cards available
               </p>
             </div>
 
-            <div className="space-y-4">
-              <div className="text-center text-sm text-gray-500">
-                {generatedQuiz.flashcards.length} cards available
-              </div>
-              
-              <button
-                onClick={() => setCurrentStep('flashcards')}
-                className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-blue-600 hover:to-indigo-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
-              >
-                <BookOpen className="w-5 h-5" />
-                <span>Study Cards</span>
-              </button>
-            </div>
+            <button className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-blue-600 hover:to-indigo-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2">
+              <BookOpen className="w-5 h-5" />
+              <span>Study Cards</span>
+            </button>
           </div>
 
           {/* Take Quiz Card */}
           <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 border border-purple-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-            <div className="flex items-center justify-center mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
-                <Play className="w-8 h-8 text-white" />
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
+                <Play className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Take Quiz</h3>
+                <p className="text-gray-600">Test your knowledge</p>
               </div>
             </div>
             
-            <div className="text-center mb-8">
-              <h3 className="text-xl font-bold text-gray-900 mb-3">Take Quiz</h3>
-              <p className="text-gray-600 leading-relaxed">
-                Test your knowledge
+            <div className="mb-6">
+              <p className="text-gray-700 text-sm leading-relaxed">
+                {generatedQuiz.questions.length} questions • ~{generatedQuiz.estimatedTime} min
               </p>
             </div>
 
-            <div className="space-y-4">
-              <div className="text-center text-sm text-gray-500">
-                {generatedQuiz.questions.length} questions • ~{generatedQuiz.estimatedTime} min
+            <button className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2">
+              <Play className="w-5 h-5" />
+              <span>Start Quiz</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Quiz Overview */}
+        <div className="bg-white rounded-xl border border-gray-200">
+          <div className="p-6 border-b border-gray-200">
+            <h3 className="text-lg font-bold text-gray-900">Quiz Overview</h3>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center space-x-3">
+                  <Target className="w-5 h-5 text-purple-500" />
+                  <div>
+                    <p className="text-sm text-gray-500">Questions</p>
+                    <p className="font-bold text-gray-900">{generatedQuiz.questions.length}</p>
+                  </div>
+                </div>
               </div>
-              
-              <button
-                onClick={() => setCurrentStep('quiz')}
-                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
-              >
-                <Play className="w-5 h-5" />
-                <span>Start Quiz</span>
-              </button>
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center space-x-3">
+                  <Clock className="w-5 h-5 text-blue-500" />
+                  <div>
+                    <p className="text-sm text-gray-500">Est. Time</p>
+                    <p className="font-bold text-gray-900">{generatedQuiz.estimatedTime} min</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center space-x-3">
+                  <BookOpen className="w-5 h-5 text-green-500" />
+                  <div>
+                    <p className="text-sm text-gray-500">Flashcards</p>
+                    <p className="font-bold text-gray-900">{generatedQuiz.flashcards.length}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center space-x-3">
+                  <Zap className="w-5 h-5 text-orange-500" />
+                  <div>
+                    <p className="text-sm text-gray-500">Difficulty</p>
+                    <p className="font-bold text-gray-900">Mixed</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quiz Guidelines */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+              <h4 className="font-bold text-blue-900 mb-4 flex items-center">
+                <AlertCircle className="w-5 h-5 mr-2" />
+                Quiz Guidelines
+              </h4>
+              <ul className="space-y-2 text-blue-800 text-sm">
+                <li className="flex items-start">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                  All questions must be answered before proceeding to the next question
+                </li>
+                <li className="flex items-start">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                  There are no negative markings - take your time to think through each answer
+                </li>
+                <li className="flex items-start">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                  Review the flashcards first to familiarize yourself with key concepts
+                </li>
+                <li className="flex items-start">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                  Watch the AI video for a comprehensive overview of the topic
+                </li>
+                <li className="flex items-start">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                  Questions include multiple choice, true/false, and fill-in-the-blank formats
+                </li>
+              </ul>
             </div>
           </div>
         </div>
 
-        {/* Quiz Guidelines */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-bold text-gray-900">Quiz Guidelines</h3>
-          </div>
-          <div className="p-6">
-            <div className="grid md:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-blue-600 text-xs font-bold">1</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">Answer Requirements</h4>
-                    <p className="text-sm text-gray-600">All questions must be answered before proceeding to the next question.</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-green-600 text-xs font-bold">2</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">Scoring System</h4>
-                    <p className="text-sm text-gray-600">No negative marking - take your time to think through each answer.</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-purple-600 text-xs font-bold">3</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">Navigation</h4>
-                    <p className="text-sm text-gray-600">You can go back to previous questions to review or change your answers.</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-orange-600 text-xs font-bold">4</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">Time Expectation</h4>
-                    <p className="text-sm text-gray-600">Estimated completion time is {generatedQuiz.estimatedTime} minutes, but there's no time limit.</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-pink-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-pink-600 text-xs font-bold">5</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">AI Explanations</h4>
-                    <p className="text-sm text-gray-600">Get detailed explanations for incorrect answers to enhance your learning.</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-teal-600 text-xs font-bold">6</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">Study First</h4>
-                    <p className="text-sm text-gray-600">Consider reviewing the flashcards before taking the quiz for better results.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Confirmation Modal */}
+        {showNewQuizConfirmation && <NewQuizConfirmationModal />}
       </div>
     );
   }
@@ -846,6 +455,30 @@ const QuizGenerator: React.FC = () => {
               {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
           </div>
+        </div>
+
+        {/* Content Length Indicator */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-medium text-gray-900">Content Length</h3>
+            <span className={`text-sm font-medium ${hasMinimumContent ? 'text-green-600' : 'text-orange-600'}`}>
+              {totalWords} / {MIN_WORDS_REQUIRED} words minimum
+            </span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className={`h-2 rounded-full transition-all duration-300 ${
+                hasMinimumContent ? 'bg-green-500' : 'bg-orange-500'
+              }`}
+              style={{ width: `${Math.min((totalWords / MIN_WORDS_REQUIRED) * 100, 100)}%` }}
+            ></div>
+          </div>
+          {!hasMinimumContent && (
+            <p className="text-sm text-orange-600 mt-2 flex items-center">
+              <AlertCircle className="w-4 h-4 mr-2" />
+              Please provide at least {MIN_WORDS_REQUIRED - totalWords} more words to generate a meaningful quiz
+            </p>
+          )}
         </div>
 
         {/* Settings Panel */}
@@ -930,10 +563,7 @@ const QuizGenerator: React.FC = () => {
                   </label>
                   <select
                     value={selectedLanguage}
-                    onChange={(e) => {
-                      setSelectedLanguage(e.target.value);
-                      setQuizSettings(prev => ({ ...prev, language: e.target.value }));
-                    }}
+                    onChange={(e) => translateContent(e.target.value)}
                     className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   >
                     <option value="en">English</option>
@@ -1066,6 +696,9 @@ const QuizGenerator: React.FC = () => {
                 placeholder="Paste your notes, lecture content, or study material here..."
                 className="w-full h-48 p-6 border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
               />
+              <div className="mt-2 text-sm text-gray-500">
+                {textInput.trim().split(/\s+/).filter(word => word.length > 0).length} words
+              </div>
             </div>
           </div>
 
@@ -1137,7 +770,7 @@ const QuizGenerator: React.FC = () => {
         <div className="max-w-full">
           <button
             onClick={handleGenerateQuiz}
-            disabled={uploadedFiles.length === 0 && !textInput.trim() || isGenerating}
+            disabled={!hasMinimumContent || isGenerating}
             className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 shadow-lg hover:shadow-xl"
           >
             {isGenerating ? (
@@ -1152,19 +785,16 @@ const QuizGenerator: React.FC = () => {
               </>
             )}
           </button>
+          {!hasMinimumContent && (
+            <p className="text-center text-sm text-orange-600 mt-2">
+              Need {MIN_WORDS_REQUIRED - totalWords} more words to generate quiz
+            </p>
+          )}
         </div>
       </div>
 
       {/* Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={showConfirmModal}
-        onClose={() => setShowConfirmModal(false)}
-        onConfirm={performReset}
-        title="Start New Quiz?"
-        message="This will clear all uploaded files and generated content. Are you sure you want to continue?"
-        confirmText="Yes, Start New"
-        cancelText="Cancel"
-      />
+      {showNewQuizConfirmation && <NewQuizConfirmationModal />}
     </div>
   );
 };

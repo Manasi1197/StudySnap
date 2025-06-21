@@ -52,6 +52,26 @@ async function rateLimitedRequest<T>(requestFn: () => Promise<T>): Promise<T> {
   return requestFn();
 }
 
+// Helper function to clean JSON response from markdown code blocks
+function cleanJsonResponse(content: string): string {
+  // Remove markdown code block delimiters
+  let cleaned = content.trim();
+  
+  // Remove ```json at the beginning
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.substring(7);
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.substring(3);
+  }
+  
+  // Remove ``` at the end
+  if (cleaned.endsWith('```')) {
+    cleaned = cleaned.substring(0, cleaned.length - 3);
+  }
+  
+  return cleaned.trim();
+}
+
 export async function generateQuizWithAI(request: GenerateQuizRequest): Promise<GeneratedQuizResponse> {
   // GPT-4o can handle longer content better
   const maxContentLength = 8000;
@@ -132,8 +152,11 @@ Ensure all content is educationally sound and promotes effective learning.
       throw new Error('No response from OpenAI');
     }
 
+    // Clean the response to remove markdown code blocks before parsing
+    const cleanedContent = cleanJsonResponse(content);
+
     // Parse the JSON response
-    const parsedResponse = JSON.parse(content);
+    const parsedResponse = JSON.parse(cleanedContent);
     
     // Ensure IDs are present
     parsedResponse.questions = parsedResponse.questions.map((q: any, index: number) => ({

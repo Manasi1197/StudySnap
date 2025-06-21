@@ -284,7 +284,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     switch (currentPage) {
       case 'study-rooms':
         return (
-          <StudyRoom onBack={() => handleNavigation('dashboard')} />
+          <StudyRoom onNavigate={handleNavigation} />
         );
       case 'marketplace':
         return (
@@ -472,12 +472,11 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
 
   // Check if we're in a sub-page that should hide the sidebar
   const isInSubPage = currentPage === 'quiz-generator' && currentSubPage;
-  const isInStudyRoom = currentPage === 'study-rooms';
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar - Hide for Quiz Generator sub-pages and Study Rooms */}
-      {!isInSubPage && !isInStudyRoom && (
+      {/* Sidebar - Hide only for Quiz Generator sub-pages */}
+      {!isInSubPage && (
         <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
           {/* Logo */}
           <div className="p-6 border-b border-gray-200">
@@ -548,8 +547,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Header - Show for all pages except Quiz Generator sub-pages and Study Rooms */}
-        {!isInSubPage && !isInStudyRoom && (
+        {/* Header - Show for all pages except Quiz Generator sub-pages */}
+        {!isInSubPage && (
           <header className="bg-white border-b border-gray-200 px-8 py-6">
             <div className="flex items-center justify-between">
               <div>
@@ -584,9 +583,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         )}
 
         {/* Dashboard Content */}
-        <main className={`flex-1 ${!isInSubPage && !isInStudyRoom && currentPage !== 'quiz-generator' ? 'p-8' : ''}`}>
+        <main className={`flex-1 ${!isInSubPage && currentPage !== 'quiz-generator' && currentPage !== 'study-rooms' ? 'p-8' : ''}`}>
           {/* Conditional container width based on current page */}
-          {currentPage === 'quiz-generator' || isInSubPage || isInStudyRoom ? (
+          {currentPage === 'quiz-generator' || isInSubPage || currentPage === 'study-rooms' ? (
             // Full width for Quiz Generator, sub-pages, and Study Rooms
             <div className="w-full">
               {renderMainContent()}

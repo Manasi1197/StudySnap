@@ -44,7 +44,8 @@ import {
   EyeOff,
   Copy,
   ExternalLink,
-  Download
+  Download,
+  ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
@@ -95,10 +96,10 @@ interface ChatMessage {
 }
 
 interface StudyRoomProps {
-  onBack: () => void;
+  onNavigate: (page: string) => void;
 }
 
-const StudyRoom: React.FC<StudyRoomProps> = ({ onBack }) => {
+const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [currentView, setCurrentView] = useState<'browse' | 'room' | 'create'>('browse');
   const [studyRooms, setStudyRooms] = useState<StudyRoom[]>([]);
@@ -711,7 +712,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onBack }) => {
                 onClick={() => setCurrentView('browse')}
                 className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
               >
-                <Users className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4" />
                 <span>Back to Rooms</span>
               </button>
               <div className="h-6 w-px bg-gray-300"></div>
@@ -1007,9 +1008,19 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onBack }) => {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-8 py-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Study Rooms</h1>
-            <p className="text-gray-600">Join collaborative study sessions with fellow learners</p>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => onNavigate('dashboard')}
+              className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Dashboard</span>
+            </button>
+            <div className="h-6 w-px bg-gray-300"></div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Study Rooms</h1>
+              <p className="text-gray-600">Join collaborative study sessions with fellow learners</p>
+            </div>
           </div>
           <div className="flex items-center space-x-3">
             <button

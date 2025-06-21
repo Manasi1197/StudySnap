@@ -137,9 +137,10 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate }) => {
       // Navigate to video page with existing video
       if (onNavigate) {
         onNavigate('video-player', {
+          quiz: generatedQuiz,
+          videoUrl: generatedVideoUrl,
           title: generatedQuiz.title,
-          description: generatedQuiz.description,
-          videoUrl: generatedVideoUrl
+          description: generatedQuiz.description
         });
       }
       return;
@@ -156,9 +157,10 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate }) => {
       
       if (onNavigate) {
         onNavigate('video-player', {
+          quiz: generatedQuiz,
+          videoUrl: videoUrl,
           title: generatedQuiz.title,
-          description: generatedQuiz.description,
-          videoUrl: videoUrl
+          description: generatedQuiz.description
         });
       }
       
@@ -176,8 +178,10 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate }) => {
     if (!generatedQuiz || !onNavigate) return;
     
     onNavigate('flashcards', {
+      quiz: generatedQuiz,
       title: generatedQuiz.title,
-      flashcards: generatedQuiz.flashcards
+      flashcards: generatedQuiz.flashcards,
+      videoUrl: generatedVideoUrl
     });
   };
 
@@ -186,7 +190,8 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate }) => {
     if (!generatedQuiz || !onNavigate) return;
     
     onNavigate('take-quiz', {
-      quiz: generatedQuiz
+      quiz: generatedQuiz,
+      videoUrl: generatedVideoUrl
     });
   };
 

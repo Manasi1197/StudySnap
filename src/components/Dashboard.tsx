@@ -63,10 +63,14 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
   };
 
   const handleSubPageNavigation = (page: string, data?: any) => {
-    // Store the current quiz generator state when navigating to sub-pages
-    if (page === 'video-player' || page === 'flashcards' || page === 'take-quiz') {
-      setQuizGeneratorState(data);
+    // Store the complete quiz data when navigating to any sub-page
+    if (data && data.quiz) {
+      setQuizGeneratorState({
+        quiz: data.quiz,
+        videoUrl: data.videoUrl || null
+      });
     }
+    
     setCurrentSubPage(page);
     setSubPageData(data);
   };
@@ -78,15 +82,44 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     // The QuizGenerator will remain in 'review' state showing the overview
   };
 
-  const handleNavigateFromSubPage = (targetPage: string, data?: any) => {
-    if (targetPage === 'quiz-overview') {
+  const handleNavigateFromSubPage = (targetView: 'video' | 'flashcards' | 'take-quiz') => {
+    if (!quizGeneratorState || !quizGeneratorState.quiz) {
+      toast.error('Quiz data not available. Returning to overview.');
       handleBackToQuizOverview();
-    } else if (targetPage === 'video-player') {
-      handleSubPageNavigation('video-player', data);
-    } else if (targetPage === 'flashcards') {
-      handleSubPageNavigation('flashcards', data);
-    } else if (targetPage === 'take-quiz') {
-      handleSubPageNavigation('take-quiz', data);
+      return;
+    }
+
+    const quiz = quizGeneratorState.quiz;
+    const videoUrl = quizGeneratorState.videoUrl;
+
+    switch (targetView) {
+      case 'video':
+        setCurrentSubPage('video-player');
+        setSubPageData({
+          quiz: quiz,
+          videoUrl: videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+          title: quiz.title,
+          description: quiz.description
+        });
+        break;
+      
+      case 'flashcards':
+        setCurrentSubPage('flashcards');
+        setSubPageData({
+          quiz: quiz,
+          videoUrl: videoUrl,
+          title: quiz.title,
+          flashcards: quiz.flashcards
+        });
+        break;
+      
+      case 'take-quiz':
+        setCurrentSubPage('take-quiz');
+        setSubPageData({
+          quiz: quiz,
+          videoUrl: videoUrl
+        });
+        break;
     }
   };
 
@@ -212,7 +245,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
             videoUrl={subPageData.videoUrl}
             onBack={handleBackToQuizOverview}
             onNavigate={handleNavigateFromSubPage}
-            quizData={quizGeneratorState}
+            quizData={subPageData.quiz}
           />
         );
       }
@@ -224,7 +257,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
             flashcards={subPageData.flashcards}
             onBack={handleBackToQuizOverview}
             onNavigate={handleNavigateFromSubPage}
-            quizData={quizGeneratorState}
+            quizData={subPageData.quiz}
           />
         );
       }

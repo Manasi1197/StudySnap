@@ -838,7 +838,7 @@ const QuizGenerator: React.FC = () => {
               <>
                 <Wand2 className="w-5 h-5" />
                 <span>Generate Quiz with AI</span>
-              </button>
+              </>
             )}
           </button>
           {!hasMinimumContent && (

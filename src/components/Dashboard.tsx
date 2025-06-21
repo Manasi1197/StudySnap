@@ -33,6 +33,8 @@ import {
   LogOut
 } from 'lucide-react';
 import QuizGenerator from './QuizGenerator';
+import VideoPlayer from './VideoPlayer';
+import FlashcardsViewer from './FlashcardsViewer';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 
@@ -43,6 +45,8 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavigate }) => {
   const { user, signOut } = useAuth();
+  const [currentSubPage, setCurrentSubPage] = React.useState<string | null>(null);
+  const [subPageData, setSubPageData] = React.useState<any>(null);
 
   const handleSignOut = async () => {
     try {
@@ -54,6 +58,16 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     } catch (error) {
       toast.error('Error signing out');
     }
+  };
+
+  const handleSubPageNavigation = (page: string, data?: any) => {
+    setCurrentSubPage(page);
+    setSubPageData(data);
+  };
+
+  const handleBackToQuizGenerator = () => {
+    setCurrentSubPage(null);
+    setSubPageData(null);
   };
 
   const sidebarItems = [
@@ -168,9 +182,33 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
   };
 
   const renderMainContent = () => {
+    // Handle sub-pages for quiz generator
+    if (currentPage === 'quiz-generator') {
+      if (currentSubPage === 'video-player' && subPageData) {
+        return (
+          <VideoPlayer
+            title={subPageData.title}
+            description={subPageData.description}
+            videoUrl={subPageData.videoUrl}
+            onBack={handleBackToQuizGenerator}
+          />
+        );
+      }
+      
+      if (currentSubPage === 'flashcards' && subPageData) {
+        return (
+          <FlashcardsViewer
+            title={subPageData.title}
+            flashcards={subPageData.flashcards}
+            onBack={handleBackToQuizGenerator}
+          />
+        );
+      }
+      
+      return <QuizGenerator onNavigate={handleSubPageNavigation} />;
+    }
+
     switch (currentPage) {
-      case 'quiz-generator':
-        return <QuizGenerator />;
       case 'study-rooms':
         return (
           <div className="text-center pt-20">
@@ -364,114 +402,118 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        {/* Logo */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-white" />
+      {/* Sidebar - Hide for sub-pages */}
+      {!(currentPage === 'quiz-generator' && currentSubPage) && (
+        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+          {/* Logo */}
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-xl font-bold text-gray-900">StudyHub</span>
             </div>
-            <span className="text-xl font-bold text-gray-900">StudyHub</span>
+          </div>
+
+          {/* Navigation */}
+          <div className="flex-1 py-6">
+            <nav className="px-4 space-y-1">
+              {sidebarItems.map((item, index) => {
+                const Icon = item.icon;
+                const isActive = currentPage === item.page;
+                return (
+                  <button
+                    key={index}
+                    onClick={() => handleNavigation(item.page)}
+                    className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Bottom Navigation */}
+          <div className="p-4 border-t border-gray-200">
+            <nav className="space-y-1">
+              {bottomSidebarItems.map((item, index) => {
+                const Icon = item.icon;
+                const isActive = currentPage === item.page;
+                return (
+                  <button
+                    key={index}
+                    onClick={() => handleNavigation(item.page)}
+                    className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+              <button
+                onClick={handleSignOut}
+                className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
+              >
+                <LogOut className="w-5 h-5" />
+                <span>Sign Out</span>
+              </button>
+            </nav>
           </div>
         </div>
-
-        {/* Navigation */}
-        <div className="flex-1 py-6">
-          <nav className="px-4 space-y-1">
-            {sidebarItems.map((item, index) => {
-              const Icon = item.icon;
-              const isActive = currentPage === item.page;
-              return (
-                <button
-                  key={index}
-                  onClick={() => handleNavigation(item.page)}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-gray-900 text-white'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Bottom Navigation */}
-        <div className="p-4 border-t border-gray-200">
-          <nav className="space-y-1">
-            {bottomSidebarItems.map((item, index) => {
-              const Icon = item.icon;
-              const isActive = currentPage === item.page;
-              return (
-                <button
-                  key={index}
-                  onClick={() => handleNavigation(item.page)}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-gray-900 text-white'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-            <button
-              onClick={handleSignOut}
-              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
-            >
-              <LogOut className="w-5 h-5" />
-              <span>Sign Out</span>
-            </button>
-          </nav>
-        </div>
-      </div>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Welcome back, {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student'}! 👋
-              </h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                <Search className="w-5 h-5" />
-              </button>
-              <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors relative">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </button>
-              <div className="flex items-center space-x-3">
-                <img
-                  src="https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop"
-                  alt="Profile"
-                  className="w-8 h-8 rounded-full"
-                />
-                <div className="text-sm">
-                  <div className="font-medium text-gray-900">
-                    {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student'}
+        {/* Header - Hide for sub-pages */}
+        {!(currentPage === 'quiz-generator' && currentSubPage) && (
+          <header className="bg-white border-b border-gray-200 px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Welcome back, {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student'}! 👋
+                </h1>
+              </div>
+              <div className="flex items-center space-x-4">
+                <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                  <Search className="w-5 h-5" />
+                </button>
+                <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors relative">
+                  <Bell className="w-5 h-5" />
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                </button>
+                <div className="flex items-center space-x-3">
+                  <img
+                    src="https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop"
+                    alt="Profile"
+                    className="w-8 h-8 rounded-full"
+                  />
+                  <div className="text-sm">
+                    <div className="font-medium text-gray-900">
+                      {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student'}
+                    </div>
+                    <div className="text-gray-500">Basic Member</div>
                   </div>
-                  <div className="text-gray-500">Basic Member</div>
                 </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
+        )}
 
         {/* Dashboard Content */}
-        <main className="flex-1 p-8">
+        <main className={`flex-1 ${!(currentPage === 'quiz-generator' && currentSubPage) ? 'p-8' : ''}`}>
           {/* Conditional container width based on current page */}
-          {currentPage === 'quiz-generator' ? (
-            // Full width for Quiz Generator
+          {currentPage === 'quiz-generator' || currentSubPage ? (
+            // Full width for Quiz Generator and sub-pages
             <div className="w-full">
               {renderMainContent()}
             </div>

@@ -34,7 +34,11 @@ import { useQuizGenerator } from '../hooks/useQuizGenerator';
 import { generateVideoWithTavus } from '../lib/tavus';
 import toast from 'react-hot-toast';
 
-const QuizGenerator: React.FC = () => {
+interface QuizGeneratorProps {
+  onNavigate?: (page: string, data?: any) => void;
+}
+
+const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate }) => {
   const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'review'>('upload');
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [showSettings, setShowSettings] = useState(false);
@@ -124,10 +128,23 @@ const QuizGenerator: React.FC = () => {
     }
   };
 
-  // Generate AI video explanation for the entire quiz topic
-  const handleGenerateVideo = async () => {
+  // Navigate to video page
+  const handleNavigateToVideo = async () => {
     if (!generatedQuiz) return;
 
+    if (generatedVideoUrl) {
+      // Navigate to video page with existing video
+      if (onNavigate) {
+        onNavigate('video-player', {
+          title: generatedQuiz.title,
+          description: generatedQuiz.description,
+          videoUrl: generatedVideoUrl
+        });
+      }
+      return;
+    }
+
+    // Generate video and then navigate
     setIsGeneratingVideo(true);
     try {
       const videoUrl = await generateVideoWithTavus(
@@ -135,6 +152,15 @@ const QuizGenerator: React.FC = () => {
         generatedQuiz.description
       );
       setGeneratedVideoUrl(videoUrl);
+      
+      if (onNavigate) {
+        onNavigate('video-player', {
+          title: generatedQuiz.title,
+          description: generatedQuiz.description,
+          videoUrl: videoUrl
+        });
+      }
+      
       toast.success('AI video generated successfully!');
     } catch (error) {
       console.error('Video generation error:', error);
@@ -142,6 +168,25 @@ const QuizGenerator: React.FC = () => {
     } finally {
       setIsGeneratingVideo(false);
     }
+  };
+
+  // Navigate to flashcards page
+  const handleNavigateToFlashcards = () => {
+    if (!generatedQuiz || !onNavigate) return;
+    
+    onNavigate('flashcards', {
+      title: generatedQuiz.title,
+      flashcards: generatedQuiz.flashcards
+    });
+  };
+
+  // Navigate to quiz taking page
+  const handleStartQuiz = () => {
+    if (!generatedQuiz || !onNavigate) return;
+    
+    onNavigate('take-quiz', {
+      quiz: generatedQuiz
+    });
   };
 
   const translateContent = async (targetLanguage: string) => {
@@ -235,17 +280,13 @@ const QuizGenerator: React.FC = () => {
               <ArrowLeft className="w-4 h-4" />
               <span>New Quiz</span>
             </button>
-            <button className="flex items-center space-x-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors">
-              <Play className="w-4 h-4" />
-              <span>Start Quiz</span>
-            </button>
           </div>
         </div>
 
-        {/* Enhanced Action Cards */}
+        {/* Enhanced Action Cards with Fixed Alignment */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* AI Video Card */}
-          <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl p-8 border border-red-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+          <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl p-8 border border-red-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
             <div className="flex items-center space-x-4 mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
                 <Video className="w-6 h-6 text-white" />
@@ -256,36 +297,15 @@ const QuizGenerator: React.FC = () => {
               </div>
             </div>
             
-            <div className="mb-6">
+            <div className="mb-6 flex-grow">
               <p className="text-gray-700 text-sm leading-relaxed">
                 Topic overview video
               </p>
             </div>
 
-            {generatedVideoUrl ? (
-              <div className="space-y-4">
-                <div className="bg-white rounded-lg p-4 border border-red-200">
-                  <video 
-                    src={generatedVideoUrl} 
-                    controls 
-                    className="w-full rounded-lg"
-                    poster="/api/placeholder/300/200"
-                  >
-                    Your browser does not support the video tag.
-                  </video>
-                </div>
-                <button
-                  onClick={handleGenerateVideo}
-                  disabled={isGeneratingVideo}
-                  className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
-                >
-                  <RotateCcw className="w-5 h-5" />
-                  <span>Regenerate</span>
-                </button>
-              </div>
-            ) : (
+            <div className="mt-auto">
               <button
-                onClick={handleGenerateVideo}
+                onClick={handleNavigateToVideo}
                 disabled={isGeneratingVideo}
                 className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -301,11 +321,11 @@ const QuizGenerator: React.FC = () => {
                   </>
                 )}
               </button>
-            )}
+            </div>
           </div>
 
           {/* Study Flashcards Card */}
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 border border-blue-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 border border-blue-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
             <div className="flex items-center space-x-4 mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
                 <BookOpen className="w-6 h-6 text-white" />
@@ -316,20 +336,25 @@ const QuizGenerator: React.FC = () => {
               </div>
             </div>
             
-            <div className="mb-6">
+            <div className="mb-6 flex-grow">
               <p className="text-gray-700 text-sm leading-relaxed">
                 {generatedQuiz.flashcards.length} cards available
               </p>
             </div>
 
-            <button className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-blue-600 hover:to-indigo-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2">
-              <BookOpen className="w-5 h-5" />
-              <span>Study Cards</span>
-            </button>
+            <div className="mt-auto">
+              <button 
+                onClick={handleNavigateToFlashcards}
+                className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-blue-600 hover:to-indigo-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+              >
+                <BookOpen className="w-5 h-5" />
+                <span>Study Cards</span>
+              </button>
+            </div>
           </div>
 
           {/* Take Quiz Card */}
-          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 border border-purple-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 border border-purple-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
             <div className="flex items-center space-x-4 mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
                 <Play className="w-6 h-6 text-white" />
@@ -340,16 +365,21 @@ const QuizGenerator: React.FC = () => {
               </div>
             </div>
             
-            <div className="mb-6">
+            <div className="mb-6 flex-grow">
               <p className="text-gray-700 text-sm leading-relaxed">
                 {generatedQuiz.questions.length} questions • ~{generatedQuiz.estimatedTime} min
               </p>
             </div>
 
-            <button className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2">
-              <Play className="w-5 h-5" />
-              <span>Start Quiz</span>
-            </button>
+            <div className="mt-auto">
+              <button 
+                onClick={handleStartQuiz}
+                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+              >
+                <Play className="w-5 h-5" />
+                <span>Start Quiz</span>
+              </button>
+            </div>
           </div>
         </div>
 

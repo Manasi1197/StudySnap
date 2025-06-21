@@ -490,20 +490,35 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         return;
       }
 
-      // Check if already in room
+      // Check if already in room - use maybeSingle() instead of single()
       const { data: existing } = await supabase
         .from('room_participants')
-        .select('id')
+        .select('id, is_active')
         .eq('room_id', room.id)
         .eq('user_id', user.id)
-        .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
       if (existing) {
-        setCurrentRoom(room);
-        setCurrentView('room');
-        setShowJoinModal(false);
-        return;
+        if (existing.is_active) {
+          // Already active in room
+          setCurrentRoom(room);
+          setCurrentView('room');
+          setShowJoinModal(false);
+          return;
+        } else {
+          // Reactivate existing participant
+          await supabase
+            .from('room_participants')
+            .update({ is_active: true })
+            .eq('room_id', room.id)
+            .eq('user_id', user.id);
+
+          setCurrentRoom(room);
+          setCurrentView('room');
+          setShowJoinModal(false);
+          toast.success('Rejoined study room!');
+          return;
+        }
       }
 
       // Check room capacity
@@ -512,7 +527,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         return;
       }
 
-      // Join room
+      // Join room as new participant
       await supabase
         .from('room_participants')
         .insert({
@@ -520,16 +535,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           user_id: user.id,
           role: 'participant',
           is_active: true
-        });
-
-      // Add system message
-      await supabase
-        .from('room_messages')
-        .insert({
-          room_id: room.id,
-          user_id: user.id,
-          message: `${user.user_metadata?.full_name || user.email} joined the room`,
-          message_type: 'system'
         });
 
       setCurrentRoom(room);
@@ -552,16 +557,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         .eq('room_id', currentRoom.id)
         .eq('user_id', user.id);
 
-      // Add system message
-      await supabase
-        .from('room_messages')
-        .insert({
-          room_id: currentRoom.id,
-          user_id: user.id,
-          message: `${user.user_metadata?.full_name || user.email} left the room`,
-          message_type: 'system'
-        });
-
       setCurrentRoom(null);
       setCurrentView('browse');
       toast.success('Left study room');
@@ -575,6 +570,20 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!newMessage.trim() || !currentRoom || !user) return;
 
     try {
+      // Check if user is an active participant before sending message
+      const { data: participant } = await supabase
+        .from('room_participants')
+        .select('id')
+        .eq('room_id', currentRoom.id)
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!participant) {
+        toast.error('You must be an active participant to send messages');
+        return;
+      }
+
       await supabase
         .from('room_messages')
         .insert({
@@ -604,16 +613,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           content_id: quizId
         });
 
-      // Add system message
-      await supabase
-        .from('room_messages')
-        .insert({
-          room_id: currentRoom.id,
-          user_id: user.id,
-          message: `${user.user_metadata?.full_name || user.email} shared a quiz`,
-          message_type: 'quiz_share'
-        });
-
       toast.success('Quiz shared successfully!');
       setShowQuizShareModal(false);
     } catch (error) {
@@ -635,16 +634,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           content_id: null // We'll store resource data differently for files
         });
 
-      // Add system message
-      await supabase
-        .from('room_messages')
-        .insert({
-          room_id: currentRoom.id,
-          user_id: user.id,
-          message: `${user.user_metadata?.full_name || user.email} shared a resource: ${resourceData.name}`,
-          message_type: 'file'
-        });
-
       toast.success('Resource added successfully!');
       setShowResourceModal(false);
     } catch (error) {
@@ -663,23 +652,11 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         
         setIsScreenSharing(true);
         toast.success('Screen sharing started!');
-        
-        // Add system message
-        if (currentRoom && user) {
-          await supabase
-            .from('room_messages')
-            .insert({
-              room_id: currentRoom.id,
-              user_id: user.id,
-              message: `${user.user_metadata?.full_name || user.email} started screen sharing`,
-              message_type: 'system'
-            });
-        }
 
         // Handle stream end
         stream.getVideoTracks()[0].onended = () => {
           setIsScreenSharing(false);
-          toast.info('Screen sharing stopped');
+          toast('Screen sharing stopped'); // Changed from toast.info to toast
         };
       } else {
         toast.error('Screen sharing not supported in this browser');
@@ -692,7 +669,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
   const stopScreenShare = () => {
     setIsScreenSharing(false);
-    toast.info('Screen sharing stopped');
+    toast('Screen sharing stopped'); // Changed from toast.info to toast
   };
 
   const clearWhiteboard = () => {

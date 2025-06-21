@@ -29,9 +29,7 @@ import {
   ChevronDown,
   ChevronUp,
   X,
-  Plus,
-  Key,
-  RefreshCw
+  Plus
 } from 'lucide-react';
 import { useQuizGenerator } from '../hooks/useQuizGenerator';
 import { generateVideoWithTavus } from '../lib/tavus';
@@ -52,9 +50,6 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [videoGenerationProgress, setVideoGenerationProgress] = useState<string>('');
-  const [videoGenerationError, setVideoGenerationError] = useState<string | null>(null);
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [newApiKey, setNewApiKey] = useState('');
   const [quizSettings, setQuizSettings] = useState({
     questionCount: 10,
     difficulty: 'mixed',
@@ -120,7 +115,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
     maxSize: 10 * 1024 * 1024 // 10MB
   });
 
-  // Generate quiz from content with video generation
+  // Generate quiz from content
   const handleGenerateQuiz = async () => {
     if (!hasMinimumContent) {
       toast.error(`Please provide at least ${MIN_WORDS_REQUIRED} words of content to generate a meaningful quiz. Current: ${totalWords} words.`);
@@ -128,17 +123,9 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
     }
 
     setCurrentStep('processing');
-    setVideoGenerationError(null);
     
     try {
-      // Generate quiz first
       await generateQuiz(quizSettings);
-      
-      // Start video generation in parallel (don't wait for it)
-      if (generatedQuiz) {
-        generateVideoInBackground(generatedQuiz.title, generatedQuiz.description);
-      }
-      
       setCurrentStep('review');
     } catch (error) {
       console.error('Quiz generation error:', error);
@@ -146,42 +133,9 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
     }
   };
 
-  // Generate video in background without blocking UI
-  const generateVideoInBackground = async (title: string, description: string) => {
-    setIsGeneratingVideo(true);
-    setVideoGenerationProgress('Generating AI video in background...');
-    
-    try {
-      const videoUrl = await generateVideoWithTavus(title, description);
-      setGeneratedVideoUrl(videoUrl);
-      setVideoGenerationProgress('Video ready!');
-      toast.success('🎬 AI video generated successfully!');
-    } catch (error: any) {
-      console.error('Video generation error:', error);
-      setVideoGenerationError(error.message || 'Failed to generate video');
-      setVideoGenerationProgress('');
-      
-      // Check if it's an API key issue
-      if (error.message?.includes('401') || error.message?.includes('403') || error.message?.includes('API key')) {
-        setVideoGenerationError('API key expired or invalid. Please update your Tavus API key.');
-        toast.error('Tavus API key expired. Please update your API key to generate videos.');
-      } else {
-        toast.error('Video generation failed. You can still use flashcards and quiz.');
-      }
-    } finally {
-      setIsGeneratingVideo(false);
-    }
-  };
-
-  // Navigate to video page
+  // Navigate to video page with enhanced progress tracking
   const handleNavigateToVideo = async () => {
     if (!generatedQuiz) return;
-
-    // Check if video generation failed due to API key issues
-    if (videoGenerationError && videoGenerationError.includes('API key')) {
-      setShowApiKeyModal(true);
-      return;
-    }
 
     if (generatedVideoUrl) {
       // Navigate to video page with existing video
@@ -196,45 +150,53 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
       return;
     }
 
-    // If video is still generating, show message
-    if (isGeneratingVideo) {
-      toast.info('Video is still generating. Please wait a moment...');
-      return;
-    }
-
-    // If no video and no error, try to generate
-    if (!videoGenerationError) {
-      generateVideoInBackground(generatedQuiz.title, generatedQuiz.description);
-      toast.info('Starting video generation...');
-    }
-  };
-
-  // Handle API key update
-  const handleUpdateApiKey = async () => {
-    if (!newApiKey.trim()) {
-      toast.error('Please enter a valid API key');
-      return;
-    }
-
+    // Generate video with progress tracking
+    setIsGeneratingVideo(true);
+    setVideoGenerationProgress('Initializing video generation...');
+    
     try {
-      // Update the API key in environment (this would typically be done server-side)
-      // For now, we'll store it in localStorage and update the module
-      localStorage.setItem('TAVUS_API_KEY', newApiKey);
+      // Show progress updates
+      const progressUpdates = [
+        'Connecting to Tavus API...',
+        'Processing quiz content...',
+        'Creating educational script...',
+        'Generating AI video...',
+        'Finalizing video production...'
+      ];
+
+      let progressIndex = 0;
+      const progressInterval = setInterval(() => {
+        if (progressIndex < progressUpdates.length - 1) {
+          progressIndex++;
+          setVideoGenerationProgress(progressUpdates[progressIndex]);
+        }
+      }, 3000);
+
+      const videoUrl = await generateVideoWithTavus(
+        generatedQuiz.title,
+        generatedQuiz.description
+      );
       
-      // Reset video generation state
-      setVideoGenerationError(null);
-      setGeneratedVideoUrl(null);
-      setShowApiKeyModal(false);
-      setNewApiKey('');
+      clearInterval(progressInterval);
+      setGeneratedVideoUrl(videoUrl);
+      setVideoGenerationProgress('Video generation completed!');
       
-      toast.success('API key updated successfully!');
-      
-      // Try generating video again with new key
-      if (generatedQuiz) {
-        generateVideoInBackground(generatedQuiz.title, generatedQuiz.description);
+      if (onNavigate) {
+        onNavigate('video-player', {
+          quiz: generatedQuiz,
+          videoUrl: videoUrl,
+          title: generatedQuiz.title,
+          description: generatedQuiz.description
+        });
       }
+      
+      toast.success('🎬 AI video generated successfully!');
     } catch (error) {
-      toast.error('Failed to update API key');
+      console.error('Video generation error:', error);
+      setVideoGenerationProgress('');
+      toast.error('Failed to generate video. Please try again.');
+    } finally {
+      setIsGeneratingVideo(false);
     }
   };
 
@@ -275,75 +237,9 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
   const resetGenerator = () => {
     setCurrentStep('upload');
     setGeneratedVideoUrl(null);
-    setVideoGenerationError(null);
     setVideoGenerationProgress('');
-    setIsGeneratingVideo(false);
     resetQuizGeneratorHook();
   };
-
-  // API Key Modal Component
-  const ApiKeyModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-8 w-full max-w-md relative">
-        <button
-          onClick={() => setShowApiKeyModal(false)}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          <X className="w-6 h-6" />
-        </button>
-
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Key className="w-8 h-8 text-red-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Update Tavus API Key</h2>
-          <p className="text-gray-600">
-            Your Tavus API key has expired or is invalid. Please enter a new API key to generate videos.
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              New Tavus API Key
-            </label>
-            <input
-              type="password"
-              value={newApiKey}
-              onChange={(e) => setNewApiKey(e.target.value)}
-              placeholder="Enter your new Tavus API key"
-              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-          
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800">
-              <strong>How to get a new API key:</strong><br />
-              1. Visit your Tavus dashboard<br />
-              2. Go to API settings<br />
-              3. Generate a new API key<br />
-              4. Copy and paste it here
-            </p>
-          </div>
-        </div>
-
-        <div className="flex space-x-4 mt-6">
-          <button
-            onClick={() => setShowApiKeyModal(false)}
-            className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleUpdateApiKey}
-            className="flex-1 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-medium"
-          >
-            Update Key
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 
   // New Quiz Confirmation Modal
   const NewQuizConfirmationModal = () => (
@@ -436,44 +332,29 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             </div>
             
             <div className="mb-6 flex-grow">
-              {videoGenerationError ? (
-                <div className="space-y-2">
-                  <p className="text-red-600 text-sm font-medium">Video generation failed</p>
-                  <p className="text-gray-700 text-sm">{videoGenerationError}</p>
-                  {videoGenerationError.includes('API key') && (
-                    <button
-                      onClick={() => setShowApiKeyModal(true)}
-                      className="flex items-center space-x-2 text-sm text-purple-600 hover:text-purple-700 font-medium"
-                    >
-                      <Key className="w-4 h-4" />
-                      <span>Update API Key</span>
-                    </button>
-                  )}
+              <p className="text-gray-700 text-sm leading-relaxed">
+                {generatedVideoUrl ? 'Video ready to watch' : 'Topic overview video'}
+              </p>
+              {isGeneratingVideo && videoGenerationProgress && (
+                <div className="mt-4">
+                  <div className="flex items-center space-x-2 text-sm text-orange-600">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{videoGenerationProgress}</span>
+                  </div>
+                  <div className="w-full bg-orange-200 rounded-full h-2 mt-2">
+                    <div className="bg-orange-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                  </div>
                 </div>
-              ) : generatedVideoUrl ? (
-                <p className="text-gray-700 text-sm leading-relaxed">Video ready to watch</p>
-              ) : isGeneratingVideo ? (
-                <div className="space-y-2">
-                  <p className="text-orange-600 text-sm font-medium">Generating video...</p>
-                  <p className="text-gray-700 text-sm">{videoGenerationProgress}</p>
-                </div>
-              ) : (
-                <p className="text-gray-700 text-sm leading-relaxed">Topic overview video</p>
               )}
             </div>
 
             <div className="mt-auto">
               <button
                 onClick={handleNavigateToVideo}
-                disabled={isGeneratingVideo && !generatedVideoUrl}
+                disabled={isGeneratingVideo}
                 className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {videoGenerationError && videoGenerationError.includes('API key') ? (
-                  <>
-                    <Key className="w-5 h-5" />
-                    <span>Update API Key</span>
-                  </>
-                ) : isGeneratingVideo && !generatedVideoUrl ? (
+                {isGeneratingVideo ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Generating...</span>
@@ -629,9 +510,8 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
           </div>
         </div>
 
-        {/* Modals */}
+        {/* Confirmation Modal */}
         {showNewQuizConfirmation && <NewQuizConfirmationModal />}
-        {showApiKeyModal && <ApiKeyModal />}
       </div>
     );
   }
@@ -992,6 +872,9 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
           )}
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {showNewQuizConfirmation && <NewQuizConfirmationModal />}
     </div>
   );
 };

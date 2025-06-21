@@ -1,5 +1,12 @@
 // Tavus API integration for AI video generation
-const TAVUS_API_KEY = import.meta.env.VITE_TAVUS_API_KEY || '98ab985a6f364892b9cb2ce85f2115e1';
+let TAVUS_API_KEY = import.meta.env.VITE_TAVUS_API_KEY || '98ab985a6f364892b9cb2ce85f2115e1';
+
+// Check for updated API key in localStorage
+const storedApiKey = localStorage.getItem('TAVUS_API_KEY');
+if (storedApiKey) {
+  TAVUS_API_KEY = storedApiKey;
+}
+
 const TAVUS_API_BASE_URL = 'https://tavusapi.com/v2';
 
 export interface TavusVideoRequest {
@@ -30,7 +37,10 @@ export async function generateVideoWithTavus(
   title: string, 
   description: string
 ): Promise<string> {
-  if (!TAVUS_API_KEY) {
+  // Check for updated API key
+  const currentApiKey = localStorage.getItem('TAVUS_API_KEY') || TAVUS_API_KEY;
+  
+  if (!currentApiKey) {
     console.warn('Tavus API key not configured, returning mock video URL');
     // Return a mock video URL for demonstration
     return 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
@@ -63,7 +73,7 @@ export async function generateVideoWithTavus(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': TAVUS_API_KEY,
+        'x-api-key': currentApiKey,
       },
       body: JSON.stringify(requestBody),
     });
@@ -71,6 +81,12 @@ export async function generateVideoWithTavus(
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Tavus API error response:', errorText);
+      
+      // Check for API key related errors
+      if (response.status === 401 || response.status === 403) {
+        throw new Error('API key expired or invalid. Please update your Tavus API key.');
+      }
+      
       throw new Error(`Tavus API error: ${response.status} - ${errorText}`);
     }
 
@@ -91,10 +107,15 @@ export async function generateVideoWithTavus(
 
     throw new Error('No video URL or ID returned from Tavus API');
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error generating video with Tavus:', error);
     
-    // Return a fallback video URL for demonstration
+    // Re-throw API key errors to be handled by the UI
+    if (error.message?.includes('API key')) {
+      throw error;
+    }
+    
+    // Return a fallback video URL for other errors
     console.log('🔄 Falling back to demo video due to error');
     return 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
   }
@@ -133,17 +154,22 @@ Good luck with your studies, and remember - you've got this! Let's begin our exp
 async function pollForVideoCompletion(videoId: string, maxAttempts: number = 60): Promise<string> {
   console.log(`🔄 Starting to poll for video completion (ID: ${videoId})`);
   
+  const currentApiKey = localStorage.getItem('TAVUS_API_KEY') || TAVUS_API_KEY;
+  
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       console.log(`📡 Polling attempt ${attempt + 1}/${maxAttempts}`);
       
       const response = await fetch(`${TAVUS_API_BASE_URL}/videos/${videoId}`, {
         headers: {
-          'x-api-key': TAVUS_API_KEY!,
+          'x-api-key': currentApiKey!,
         },
       });
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('API key expired or invalid. Please update your Tavus API key.');
+        }
         throw new Error(`Failed to check video status: ${response.status}`);
       }
 
@@ -164,8 +190,13 @@ async function pollForVideoCompletion(videoId: string, maxAttempts: number = 60)
       console.log('⏱️ Waiting 10 seconds before next check...');
       await new Promise(resolve => setTimeout(resolve, 10000));
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(`❌ Polling attempt ${attempt + 1} failed:`, error);
+      
+      // Re-throw API key errors immediately
+      if (error.message?.includes('API key')) {
+        throw error;
+      }
       
       // If this is the last attempt, throw the error
       if (attempt === maxAttempts - 1) {
@@ -182,18 +213,25 @@ async function pollForVideoCompletion(videoId: string, maxAttempts: number = 60)
 }
 
 export async function getVideoStatus(videoId: string): Promise<TavusVideoResponse> {
-  if (!TAVUS_API_KEY) {
+  const currentApiKey = localStorage.getItem('TAVUS_API_KEY') || TAVUS_API_KEY;
+  
+  if (!currentApiKey) {
     throw new Error('Tavus API key not configured');
   }
 
   const response = await fetch(`${TAVUS_API_BASE_URL}/videos/${videoId}`, {
     headers: {
-      'x-api-key': TAVUS_API_KEY,
+      'x-api-key': currentApiKey,
     },
   });
 
   if (!response.ok) {
     const errorText = await response.text();
+    
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('API key expired or invalid. Please update your Tavus API key.');
+    }
+    
     throw new Error(`Failed to get video status: ${response.status} - ${errorText}`);
   }
 
@@ -201,7 +239,9 @@ export async function getVideoStatus(videoId: string): Promise<TavusVideoRespons
 }
 
 export async function listReplicas(): Promise<TavusReplica[]> {
-  if (!TAVUS_API_KEY) {
+  const currentApiKey = localStorage.getItem('TAVUS_API_KEY') || TAVUS_API_KEY;
+  
+  if (!currentApiKey) {
     console.warn('Tavus API key not configured');
     return [];
   }
@@ -209,27 +249,40 @@ export async function listReplicas(): Promise<TavusReplica[]> {
   try {
     const response = await fetch(`${TAVUS_API_BASE_URL}/replicas`, {
       headers: {
-        'x-api-key': TAVUS_API_KEY,
+        'x-api-key': currentApiKey,
       },
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Failed to list replicas:', errorText);
+      
+      if (response.status === 401 || response.status === 403) {
+        throw new Error('API key expired or invalid. Please update your Tavus API key.');
+      }
+      
       return [];
     }
 
     const data = await response.json();
     console.log('📋 Available replicas:', data);
     return data.replicas || [];
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error listing replicas:', error);
+    
+    // Re-throw API key errors
+    if (error.message?.includes('API key')) {
+      throw error;
+    }
+    
     return [];
   }
 }
 
 export async function deleteVideo(videoId: string): Promise<boolean> {
-  if (!TAVUS_API_KEY) {
+  const currentApiKey = localStorage.getItem('TAVUS_API_KEY') || TAVUS_API_KEY;
+  
+  if (!currentApiKey) {
     throw new Error('Tavus API key not configured');
   }
 
@@ -237,7 +290,7 @@ export async function deleteVideo(videoId: string): Promise<boolean> {
     const response = await fetch(`${TAVUS_API_BASE_URL}/videos/${videoId}`, {
       method: 'DELETE',
       headers: {
-        'x-api-key': TAVUS_API_KEY,
+        'x-api-key': currentApiKey,
       },
     });
 
@@ -263,4 +316,10 @@ export function getVideoThumbnail(videoUrl: string): string {
   // For Tavus videos, we might need to generate thumbnails differently
   // For now, return a placeholder
   return '/api/placeholder/400/225';
+}
+
+// Function to update API key
+export function updateTavusApiKey(newApiKey: string): void {
+  localStorage.setItem('TAVUS_API_KEY', newApiKey);
+  TAVUS_API_KEY = newApiKey;
 }

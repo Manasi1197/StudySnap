@@ -714,7 +714,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         </div>
 
         <div className="flex-1 flex">
-          {/* Main Content Area */}
+          {/* Left Side - Whiteboard */}
           <div className="flex-1 flex flex-col">
             {/* Whiteboard */}
             {showWhiteboard && (
@@ -767,8 +767,31 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               </div>
             )}
 
+            {/* Main Content Area - Placeholder when whiteboard is hidden */}
+            {!showWhiteboard && (
+              <div className="flex-1 flex items-center justify-center bg-white">
+                <div className="text-center">
+                  <Palette className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">Collaborative Whiteboard</h3>
+                  <p className="text-gray-600 mb-6">
+                    Click "Show Whiteboard" to start drawing and collaborating with other participants
+                  </p>
+                  <button
+                    onClick={() => setShowWhiteboard(true)}
+                    className="flex items-center space-x-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors mx-auto"
+                  >
+                    <Palette className="w-4 h-4" />
+                    <span>Show Whiteboard</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right Side - Chat and Participants */}
+          <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
             {/* Chat Area */}
-            <div className="flex-1 flex flex-col bg-white">
+            <div className="flex-1 flex flex-col">
               <div className="p-4 border-b border-gray-200">
                 <h3 className="font-medium text-gray-900">Chat</h3>
               </div>
@@ -830,32 +853,32 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Participants Sidebar */}
-          <div className="w-64 bg-white border-l border-gray-200">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="font-medium text-gray-900">Participants ({participants.length})</h3>
-            </div>
-            <div className="p-4 space-y-3">
-              {participants.map((participant) => (
-                <div key={participant.id} className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-medium text-gray-600">
-                      {participant.profiles?.full_name?.charAt(0) || participant.profiles?.email?.charAt(0) || 'U'}
-                    </span>
+            {/* Participants Section */}
+            <div className="border-t border-gray-200">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="font-medium text-gray-900">Participants ({participants.length})</h3>
+              </div>
+              <div className="p-4 space-y-3 max-h-48 overflow-y-auto">
+                {participants.map((participant) => (
+                  <div key={participant.id} className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+                      <span className="text-xs font-medium text-gray-600">
+                        {participant.profiles?.full_name?.charAt(0) || participant.profiles?.email?.charAt(0) || 'U'}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {participant.profiles?.full_name || participant.profiles?.email || 'Unknown User'}
+                      </p>
+                      <p className="text-xs text-gray-500 capitalize">{participant.role}</p>
+                    </div>
+                    {participant.role === 'host' && (
+                      <Crown className="w-4 h-4 text-yellow-500" />
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {participant.profiles?.full_name || participant.profiles?.email || 'Unknown User'}
-                    </p>
-                    <p className="text-xs text-gray-500 capitalize">{participant.role}</p>
-                  </div>
-                  {participant.role === 'host' && (
-                    <Crown className="w-4 h-4 text-yellow-500" />
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>

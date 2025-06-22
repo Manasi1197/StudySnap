@@ -60,12 +60,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onAuthAction }) => {
 
   const studyGroups = [
     {
-      name: 'Biology Masters',
-      students: 28,
-      color: 'bg-orange-400',
-      image: 'https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop'
-    },
-    {
       name: 'Math Wizards',
       students: 34,
       color: 'bg-green-400',
@@ -147,21 +141,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onAuthAction }) => {
                     <span className="inline-block bg-yellow-400 text-gray-900 px-3 py-1 rounded-full text-sm font-medium animate-pulse" style={{ animationDelay: '0.5s' }}>
                       # PrintDesign
                     </span>
-                    <span className="inline-block bg-orange-400 text-white px-3 py-1 rounded-full text-sm font-medium animate-pulse" style={{ animationDelay: '1s' }}>
+                    <span className="inline-block bg-green-400 text-white px-3 py-1 rounded-full text-sm font-medium animate-pulse" style={{ animationDelay: '1s' }}>
                       # DigitalIllustration
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Floating Study Group Cards - Enhanced with animations */}
+              {/* Floating Study Group Cards - Only Green and Pink */}
               <div className="absolute -bottom-8 -right-4 space-y-3 z-20">
                 {studyGroups.map((group, index) => (
                   <div 
                     key={index} 
                     className={`${group.color} rounded-2xl p-4 shadow-xl transform transition-all duration-500 hover:scale-110 hover:rotate-0 w-72 animate-float`}
                     style={{
-                      transform: `translateY(${index * -8}px) rotate(${index === 0 ? '2deg' : index === 1 ? '-1deg' : '1deg'})`,
+                      transform: `translateY(${index * -8}px) rotate(${index === 0 ? '-1deg' : '1deg'})`,
                       animationDelay: `${index * 0.5}s`,
                       animationDuration: `${3 + index * 0.5}s`
                     }}
@@ -268,10 +262,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onAuthAction }) => {
       <style jsx>{`
         @keyframes float {
           0%, 100% {
-            transform: translateY(0px) rotate(2deg);
+            transform: translateY(0px) rotate(-1deg);
           }
           50% {
-            transform: translateY(-10px) rotate(-1deg);
+            transform: translateY(-10px) rotate(1deg);
           }
         }
         
@@ -299,10 +293,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onAuthAction }) => {
         
         .animate-float:nth-child(2) {
           animation-delay: 0.5s;
-        }
-        
-        .animate-float:nth-child(3) {
-          animation-delay: 1s;
         }
       `}</style>
     </div>

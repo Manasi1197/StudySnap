@@ -82,53 +82,48 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 sm:px-8 py-4 sm:py-6">
+      <div className="bg-white border-b border-gray-200 px-8 py-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button
               onClick={onBack}
-              className="flex items-center space-x-2 px-3 sm:px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Back to Quiz Overview</span>
+              <span>Back to Quiz Overview</span>
             </button>
-            <div className="h-6 w-px bg-gray-300 hidden sm:block"></div>
-            <div className="hidden sm:block">
-              <h1 className="text-lg sm:text-xl font-bold text-gray-900">{title}</h1>
-              <p className="text-gray-600 text-sm">Study Flashcards</p>
+            <div className="h-6 w-px bg-gray-300"></div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">{title}</h1>
+              <p className="text-gray-600">Study Flashcards</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center space-x-3">
             <button
               onClick={shuffleCards}
-              className="flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-xs sm:text-sm"
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
             >
-              <Shuffle className="w-3 sm:w-4 h-3 sm:h-4" />
+              <Shuffle className="w-4 h-4" />
               <span>Shuffle</span>
             </button>
             <button
               onClick={resetProgress}
-              className="flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm"
+              className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
             >
-              <RotateCcw className="w-3 sm:w-4 h-3 sm:h-4" />
+              <RotateCcw className="w-4 h-4" />
               <span>Reset</span>
             </button>
           </div>
         </div>
-        {/* Mobile title */}
-        <div className="sm:hidden mt-2">
-          <h1 className="text-lg font-bold text-gray-900">{title}</h1>
-          <p className="text-gray-600 text-sm">Study Flashcards</p>
-        </div>
       </div>
 
       {/* Progress Bar */}
-      <div className="bg-white border-b border-gray-200 px-4 sm:px-8 py-4">
+      <div className="bg-white border-b border-gray-200 px-8 py-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs sm:text-sm font-medium text-gray-700">
+          <span className="text-sm font-medium text-gray-700">
             Card {currentIndex + 1} of {flashcards.length}
           </span>
-          <span className="text-xs sm:text-sm font-medium text-gray-700">
+          <span className="text-sm font-medium text-gray-700">
             {studiedCards.size} studied ({Math.round(progress)}%)
           </span>
         </div>
@@ -141,59 +136,59 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
       </div>
 
       {/* Flashcard Content - Full Width Layout */}
-      <div className="px-4 sm:px-8 py-6 sm:py-8">
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 sm:gap-8 max-w-full">
+      <div className="px-8 py-8">
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-8 max-w-full">
           {/* Main Flashcard - Takes up more space */}
           <div className="xl:col-span-4">
             <div className="perspective-1000">
               <div 
-                className={`relative w-full h-[300px] sm:h-[500px] transform-style-preserve-3d transition-transform duration-700 cursor-pointer ${
+                className={`relative w-full h-[500px] transform-style-preserve-3d transition-transform duration-700 cursor-pointer ${
                   isFlipped ? 'rotate-y-180' : ''
                 }`}
                 onClick={flipCard}
               >
                 {/* Front of card */}
-                <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-2xl p-6 sm:p-12 flex flex-col justify-center items-center text-white">
+                <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-2xl p-12 flex flex-col justify-center items-center text-white">
                   <div className="text-center max-w-4xl">
-                    <div className="w-16 sm:w-20 h-16 sm:h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8">
-                      <BookOpen className="w-8 sm:w-10 h-8 sm:h-10 text-white" />
+                    <div className="w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-8">
+                      <BookOpen className="w-10 h-10 text-white" />
                     </div>
-                    <h2 className="text-xl sm:text-3xl font-bold mb-4 sm:mb-6">Question</h2>
-                    <p className="text-lg sm:text-2xl leading-relaxed">{currentCard?.front}</p>
+                    <h2 className="text-3xl font-bold mb-6">Question</h2>
+                    <p className="text-2xl leading-relaxed">{currentCard?.front}</p>
                   </div>
-                  <div className="absolute bottom-6 sm:bottom-8 left-1/2 transform -translate-x-1/2">
-                    <p className="text-white text-opacity-80 text-sm sm:text-lg">Click to reveal answer</p>
+                  <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+                    <p className="text-white text-opacity-80 text-lg">Click to reveal answer</p>
                   </div>
                 </div>
 
                 {/* Back of card */}
-                <div className="absolute inset-0 backface-hidden rotate-y-180 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-2xl p-6 sm:p-12 flex flex-col justify-center items-center text-white">
+                <div className="absolute inset-0 backface-hidden rotate-y-180 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-2xl p-12 flex flex-col justify-center items-center text-white">
                   <div className="text-center max-w-4xl">
-                    <div className="w-16 sm:w-20 h-16 sm:h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8">
-                      <BookOpen className="w-8 sm:w-10 h-8 sm:h-10 text-white" />
+                    <div className="w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-8">
+                      <BookOpen className="w-10 h-10 text-white" />
                     </div>
-                    <h2 className="text-xl sm:text-3xl font-bold mb-4 sm:mb-6">Answer</h2>
-                    <p className="text-lg sm:text-2xl leading-relaxed">{currentCard?.back}</p>
+                    <h2 className="text-3xl font-bold mb-6">Answer</h2>
+                    <p className="text-2xl leading-relaxed">{currentCard?.back}</p>
                   </div>
-                  <div className="absolute bottom-6 sm:bottom-8 left-1/2 transform -translate-x-1/2">
-                    <p className="text-white text-opacity-80 text-sm sm:text-lg">Click to flip back</p>
+                  <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+                    <p className="text-white text-opacity-80 text-lg">Click to flip back</p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Navigation Controls */}
-            <div className="flex items-center justify-between mt-6 sm:mt-8">
+            <div className="flex items-center justify-between mt-8">
               <button
                 onClick={prevCard}
                 disabled={currentIndex === 0}
-                className="flex items-center space-x-1 sm:space-x-2 px-4 sm:px-8 py-3 sm:py-4 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-lg font-medium"
+                className="flex items-center space-x-2 px-8 py-4 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg font-medium"
               >
-                <ChevronLeft className="w-4 sm:w-6 h-4 sm:h-6" />
+                <ChevronLeft className="w-6 h-6" />
                 <span>Previous</span>
               </button>
 
-              <div className="hidden sm:flex items-center space-x-6 bg-white rounded-xl px-8 py-4 border border-gray-200">
+              <div className="flex items-center space-x-6 bg-white rounded-xl px-8 py-4 border border-gray-200">
                 <span className="text-lg text-gray-500">
                   Topic: <span className="font-medium text-gray-900">{currentCard?.topic}</span>
                 </span>
@@ -202,18 +197,11 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
               <button
                 onClick={nextCard}
                 disabled={currentIndex === flashcards.length - 1}
-                className="flex items-center space-x-1 sm:space-x-2 px-4 sm:px-8 py-3 sm:py-4 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-lg font-medium"
+                className="flex items-center space-x-2 px-8 py-4 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg font-medium"
               >
                 <span>Next</span>
-                <ChevronRight className="w-4 sm:w-6 h-4 sm:h-6" />
+                <ChevronRight className="w-6 h-6" />
               </button>
-            </div>
-            
-            {/* Mobile topic display */}
-            <div className="sm:hidden mt-4 bg-white rounded-xl px-4 py-3 border border-gray-200 text-center">
-              <span className="text-sm text-gray-500">
-                Topic: <span className="font-medium text-gray-900">{currentCard?.topic}</span>
-              </span>
             </div>
           </div>
 

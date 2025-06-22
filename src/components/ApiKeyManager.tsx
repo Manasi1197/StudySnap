@@ -80,7 +80,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-6 sm:p-8 w-full max-w-md relative">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-md relative">
         <button
           onClick={handleClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
@@ -88,12 +88,12 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
           <X className="w-6 h-6" />
         </button>
 
-        <div className="text-center mb-6 sm:mb-8">
+        <div className="text-center mb-8">
           <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Key className="w-8 h-8 text-purple-600" />
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Update ElevenLabs API Key</h2>
-          <p className="text-gray-600 text-sm sm:text-base">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Update ElevenLabs API Key</h2>
+          <p className="text-gray-600">
             {currentError || 'Your current API key has expired or is invalid. Please enter a new one to continue generating audio.'}
           </p>
         </div>
@@ -109,7 +109,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                 type="password"
                 value={newApiKey}
                 onChange={(e) => setNewApiKey(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm sm:text-base"
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 placeholder="Enter your ElevenLabs API key"
                 disabled={isValidating}
               />
@@ -140,8 +140,8 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
 
           {/* Instructions */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-medium text-blue-900 mb-2 text-sm sm:text-base">How to get your ElevenLabs API Key:</h4>
-            <ol className="text-xs sm:text-sm text-blue-800 space-y-1">
+            <h4 className="font-medium text-blue-900 mb-2">How to get your ElevenLabs API Key:</h4>
+            <ol className="text-sm text-blue-800 space-y-1">
               <li>1. Go to <a href="https://elevenlabs.io" target="_blank" rel="noopener noreferrer" className="underline">elevenlabs.io</a></li>
               <li>2. Sign in to your account</li>
               <li>3. Navigate to Profile → API Keys</li>
@@ -150,10 +150,10 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
             </ol>
           </div>
 
-          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+          <div className="flex space-x-4">
             <button
               onClick={handleClose}
-              className="px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm sm:text-base"
+              className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
               disabled={isValidating}
             >
               Cancel
@@ -161,7 +161,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
             <button
               onClick={handleValidateAndSave}
               disabled={isValidating || !newApiKey.trim()}
-              className="px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-sm sm:text-base"
+              className="flex-1 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
               {isValidating ? (
                 <>

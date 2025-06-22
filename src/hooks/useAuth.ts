@@ -45,6 +45,8 @@ export function useAuth() {
       if (event === 'SIGNED_OUT') {
         setSession(null);
         setUser(null);
+        // Clear profile cache when signing out
+        window.dispatchEvent(new CustomEvent('profileUpdated', { detail: null }));
       } else {
         setSession(session);
         setUser(session?.user ?? null);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Bell, Shield, Palette, Globe, Download, Trash2, Key, Mail, Phone, Camera, Save, X, Check, AlertTriangle, Eye, EyeOff, Moon, Sun, Volume2, VolumeX, Smartphone, Monitor, Tablet, Settings, Lock, Unlock, RefreshCw, LogOut, CreditCard, FileText, HelpCircle, ExternalLink, ChevronRight, ToggleLeft as Toggle, Upload, Image } from 'lucide-react';
+import { User, Bell, Shield, Palette, Globe, Download, Trash2, Key, Mail, Phone, Camera, Save, X, Check, AlertTriangle, Eye, EyeOff, Volume2, VolumeX, Smartphone, Monitor, Tablet, Settings, Lock, Unlock, RefreshCw, LogOut, CreditCard, FileText, HelpCircle, ExternalLink, ChevronRight, ToggleLeft as Toggle, Upload, Image } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
@@ -15,7 +15,7 @@ interface UserProfile {
 }
 
 interface UserSettings {
-  theme: 'light' | 'dark' | 'system';
+  theme: 'light' | 'system';
   language: string;
   notifications: {
     email: boolean;
@@ -178,7 +178,14 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ onNavigate }) => {
 
       if (error) throw error;
 
-      setProfile({ ...profile, ...updates });
+      const updatedProfile = { ...profile, ...updates };
+      setProfile(updatedProfile);
+      
+      // Trigger a custom event to notify other components of profile updates
+      window.dispatchEvent(new CustomEvent('profileUpdated', { 
+        detail: updatedProfile 
+      }));
+      
       toast.success('Profile updated successfully');
     } catch (error: any) {
       console.error('Error updating profile:', error);

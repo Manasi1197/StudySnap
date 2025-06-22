@@ -28,7 +28,8 @@ import {
   Play,
   CheckCircle,
   Circle,
-  LogOut
+  LogOut,
+  ShoppingBag
 } from 'lucide-react';
 import QuizGenerator from './QuizGenerator';
 import AudioPlayer from './AudioPlayer';
@@ -37,6 +38,7 @@ import QuizTaker from './QuizTaker';
 import StudyRoom from './StudyRoom';
 import MaterialsManager from './MaterialsManager';
 import AchievementsManager from './AchievementsManager';
+import MarketplaceManager from './MarketplaceManager';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 
@@ -130,7 +132,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     { icon: Users, label: 'Study Rooms', page: 'study-rooms' },
     { icon: FileText, label: 'Materials', page: 'materials' },
     { icon: Award, label: 'Achievements', page: 'achievements' },
-    { icon: DollarSign, label: 'Marketplace', page: 'marketplace' },
+    { icon: ShoppingBag, label: 'Marketplace', page: 'marketplace' },
   ];
 
   const bottomSidebarItems = [
@@ -286,12 +288,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
       case 'achievements':
         return <AchievementsManager onNavigate={handleNavigation} />;
       case 'marketplace':
-        return (
-          <div className="text-center pt-20">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Marketplace</h1>
-            <p className="text-xl text-gray-600">Monetize your study materials - feature in development!</p>
-          </div>
-        );
+        return <MarketplaceManager onNavigate={handleNavigation} />;
       case 'settings':
         return (
           <div className="text-center pt-20">
@@ -547,10 +544,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         )}
 
         {/* Dashboard Content */}
-        <main className={`flex-1 ${!isInSubPage && currentPage !== 'quiz-generator' && currentPage !== 'study-rooms' && currentPage !== 'materials' && currentPage !== 'achievements' ? 'p-8' : ''}`}>
+        <main className={`flex-1 ${!isInSubPage && currentPage !== 'quiz-generator' && currentPage !== 'study-rooms' && currentPage !== 'materials' && currentPage !== 'achievements' && currentPage !== 'marketplace' ? 'p-8' : ''}`}>
           {/* Conditional container width based on current page */}
-          {currentPage === 'quiz-generator' || isInSubPage || currentPage === 'study-rooms' || currentPage === 'materials' || currentPage === 'achievements' ? (
-            // Full width for Quiz Generator, sub-pages, Study Rooms, Materials, and Achievements
+          {currentPage === 'quiz-generator' || isInSubPage || currentPage === 'study-rooms' || currentPage === 'materials' || currentPage === 'achievements' || currentPage === 'marketplace' ? (
+            // Full width for Quiz Generator, sub-pages, Study Rooms, Materials, Achievements, and Marketplace
             <div className="w-full">
               {renderMainContent()}
             </div>
@@ -649,6 +646,15 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
                             <Award className="w-4 h-4 text-white" />
                           </div>
                           <span className="font-medium text-gray-900">View Achievements</span>
+                        </button>
+                        <button 
+                          onClick={() => handleNavigation('marketplace')}
+                          className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                            <ShoppingBag className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="font-medium text-gray-900">Browse Marketplace</span>
                         </button>
                       </div>
                     </div>

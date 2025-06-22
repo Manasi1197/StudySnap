@@ -23,7 +23,9 @@ import {
   Brain,
   FileText,
   ChevronDown,
-  X
+  X,
+  Edit3,
+  Eraser
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -123,9 +125,10 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [userMaterials, setUserMaterials] = useState<StudyMaterial[]>([]);
   const [selectedResourceId, setSelectedResourceId] = useState('');
   
-  // Whiteboard state - simple version
+  // Whiteboard state - with pencil and eraser
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentColor, setCurrentColor] = useState('#000000');
+  const [currentTool, setCurrentTool] = useState<'pencil' | 'eraser'>('pencil');
   
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -142,6 +145,13 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     max_participants: 10,
     is_public: true
   });
+
+  // Auto-scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   // Load rooms on component mount
   useEffect(() => {
@@ -492,7 +502,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     }
   };
 
-  // Simple whiteboard functions
+  // Whiteboard functions with pencil and eraser
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     setIsDrawing(true);
     const canvas = canvasRef.current;
@@ -523,8 +533,16 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!ctx) return;
     
     ctx.lineTo(x, y);
-    ctx.strokeStyle = currentColor;
-    ctx.lineWidth = 2;
+    
+    if (currentTool === 'pencil') {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = currentColor;
+      ctx.lineWidth = 2;
+    } else if (currentTool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = 10;
+    }
+    
     ctx.stroke();
   };
 
@@ -789,20 +807,48 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        {/* Simple Whiteboard Tools */}
+        {/* Whiteboard Tools */}
         <div className="border-b border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              {/* Color Picker */}
+              {/* Tool Selection */}
               <div className="flex items-center space-x-2">
-                <input
-                  type="color"
-                  value={currentColor}
-                  onChange={(e) => setCurrentColor(e.target.value)}
-                  className="w-8 h-8 rounded border border-gray-200 cursor-pointer"
-                />
-                <span className="text-sm text-gray-600">Color</span>
+                <button
+                  onClick={() => setCurrentTool('pencil')}
+                  className={`p-2 rounded-lg transition-colors ${
+                    currentTool === 'pencil' 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                  title="Pencil"
+                >
+                  <Edit3 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setCurrentTool('eraser')}
+                  className={`p-2 rounded-lg transition-colors ${
+                    currentTool === 'eraser' 
+                      ? 'bg-red-500 text-white' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                  title="Eraser"
+                >
+                  <Eraser className="w-4 h-4" />
+                </button>
               </div>
+
+              {/* Color Picker - Only show for pencil */}
+              {currentTool === 'pencil' && (
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="color"
+                    value={currentColor}
+                    onChange={(e) => setCurrentColor(e.target.value)}
+                    className="w-8 h-8 rounded border border-gray-200 cursor-pointer"
+                  />
+                  <span className="text-sm text-gray-600">Color</span>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center space-x-2">
@@ -822,7 +868,9 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             ref={canvasRef}
             width={800}
             height={600}
-            className="w-full h-full border border-gray-200 rounded-lg cursor-crosshair bg-white"
+            className={`w-full h-full border border-gray-200 rounded-lg bg-white ${
+              currentTool === 'pencil' ? 'cursor-crosshair' : 'cursor-pointer'
+            }`}
             onMouseDown={startDrawing}
             onMouseMove={draw}
             onMouseUp={stopDrawing}

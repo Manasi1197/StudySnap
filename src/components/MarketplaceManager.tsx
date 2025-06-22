@@ -249,9 +249,9 @@ const MarketplaceManager: React.FC<MarketplaceManagerProps> = ({ onNavigate }) =
         .from('seller_profiles')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
       setSellerProfile(data);
     } catch (error: any) {
       console.error('Error loading seller profile:', error);

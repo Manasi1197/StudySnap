@@ -462,10 +462,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
           {/* Logo */}
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-white" />
+              <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
+                <Zap className="w-6 h-6 text-white" />
               </div>
-              <span className="text-xl font-bold text-gray-900">StudySnap</span>
+              <span className="text-2xl font-bold text-gray-900">StudySnap</span>
             </div>
           </div>
 

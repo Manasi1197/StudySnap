@@ -302,18 +302,29 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!user) return;
 
     try {
-      // Check if already a participant - use array instead of single()
+      // Check if any participant record exists for this user and room (active or inactive)
       const { data: existingParticipants, error: checkError } = await supabase
         .from('room_participants')
         .select('*')
         .eq('room_id', room.id)
-        .eq('user_id', user.id)
-        .eq('is_active', true);
+        .eq('user_id', user.id);
 
       if (checkError) throw checkError;
 
-      // If no existing active participant found, add as new participant
-      if (!existingParticipants || existingParticipants.length === 0) {
+      if (existingParticipants && existingParticipants.length > 0) {
+        // Update existing participant record to active
+        const existingParticipant = existingParticipants[0];
+        const { error: updateError } = await supabase
+          .from('room_participants')
+          .update({ 
+            is_active: true,
+            joined_at: new Date().toISOString()
+          })
+          .eq('id', existingParticipant.id);
+
+        if (updateError) throw updateError;
+      } else {
+        // No existing record found, insert new participant
         const { error: insertError } = await supabase
           .from('room_participants')
           .insert({
@@ -323,9 +334,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           });
 
         if (insertError) throw insertError;
-      } else {
-        // User is already an active participant, just proceed to join
-        console.log('User is already an active participant in this room');
       }
 
       setSelectedRoom(room);

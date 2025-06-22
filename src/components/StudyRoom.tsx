@@ -29,7 +29,8 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  Hash
+  Hash,
+  CheckCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -79,6 +80,21 @@ interface RoomMessage {
   };
 }
 
+interface Quiz {
+  id: string;
+  title: string;
+  description: string;
+  questions: any[];
+  flashcards: any[];
+}
+
+interface StudyMaterial {
+  id: string;
+  title: string;
+  content: string;
+  file_type: string;
+}
+
 interface StudyRoomProps {
   onNavigate?: (page: string) => void;
 }
@@ -98,6 +114,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showResourceModal, setShowResourceModal] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [isDrawing, setIsDrawing] = useState(false);
@@ -105,6 +122,8 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [currentColor, setCurrentColor] = useState('#000000');
   const [brushSize, setBrushSize] = useState(3);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [userQuizzes, setUserQuizzes] = useState<Quiz[]>([]);
+  const [userMaterials, setUserMaterials] = useState<StudyMaterial[]>([]);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -237,6 +256,42 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       loadStudyRooms();
     }
   }, [user]);
+
+  // Load user's quizzes and materials for sharing
+  useEffect(() => {
+    if (user && showResourceModal) {
+      loadUserResources();
+    }
+  }, [user, showResourceModal]);
+
+  const loadUserResources = async () => {
+    if (!user) return;
+
+    try {
+      // Load user's quizzes
+      const { data: quizzesData, error: quizzesError } = await supabase
+        .from('quizzes')
+        .select('id, title, description, questions, flashcards')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (quizzesError) throw quizzesError;
+      setUserQuizzes(quizzesData || []);
+
+      // Load user's study materials
+      const { data: materialsData, error: materialsError } = await supabase
+        .from('study_materials')
+        .select('id, title, content, file_type')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (materialsError) throw materialsError;
+      setUserMaterials(materialsData || []);
+    } catch (error: any) {
+      console.error('Error loading user resources:', error);
+      toast.error('Failed to load your resources');
+    }
+  };
 
   const loadStudyRooms = async () => {
     if (!user) return;
@@ -558,19 +613,86 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     }
   };
 
-  // Resource sharing functions
-  const shareQuiz = () => {
-    toast('Quiz sharing feature coming soon!');
+  // Share quiz to room
+  const shareQuizToRoom = async (quiz: Quiz) => {
+    if (!user || !currentRoom) return;
+
+    try {
+      // Share the quiz content to room shared content
+      const { error: shareError } = await supabase
+        .from('room_shared_content')
+        .insert({
+          room_id: currentRoom.id,
+          user_id: user.id,
+          content_type: 'quiz',
+          content_id: quiz.id
+        });
+
+      if (shareError) throw shareError;
+
+      // Send a system message about the shared quiz
+      const { error: messageError } = await supabase
+        .from('room_messages')
+        .insert({
+          room_id: currentRoom.id,
+          user_id: user.id,
+          message: `Shared quiz: "${quiz.title}" - ${quiz.questions.length} questions`,
+          message_type: 'quiz_share'
+        });
+
+      if (messageError) throw messageError;
+
+      toast.success('Quiz shared successfully!');
+      setShowResourceModal(false);
+      await loadRoomData(currentRoom.id);
+    } catch (error: any) {
+      console.error('Error sharing quiz:', error);
+      toast.error('Failed to share quiz');
+    }
   };
 
-  const shareMaterial = () => {
-    toast('Material sharing feature coming soon!');
+  // Share material to room
+  const shareMaterialToRoom = async (material: StudyMaterial) => {
+    if (!user || !currentRoom) return;
+
+    try {
+      // Share the material content to room shared content
+      const { error: shareError } = await supabase
+        .from('room_shared_content')
+        .insert({
+          room_id: currentRoom.id,
+          user_id: user.id,
+          content_type: 'study_material',
+          content_id: material.id
+        });
+
+      if (shareError) throw shareError;
+
+      // Send a system message about the shared material
+      const { error: messageError } = await supabase
+        .from('room_messages')
+        .insert({
+          room_id: currentRoom.id,
+          user_id: user.id,
+          message: `Shared study material: "${material.title}" (${material.file_type})`,
+          message_type: 'system'
+        });
+
+      if (messageError) throw messageError;
+
+      toast.success('Material shared successfully!');
+      setShowResourceModal(false);
+      await loadRoomData(currentRoom.id);
+    } catch (error: any) {
+      console.error('Error sharing material:', error);
+      toast.error('Failed to share material');
+    }
   };
 
   // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
 
@@ -767,7 +889,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               <h4 className="font-medium text-gray-900 mb-3">Share Resources</h4>
               <div className="space-y-2">
                 <button 
-                  onClick={shareMaterial}
+                  onClick={() => setShowResourceModal(true)}
                   className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
                 >
                   <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
@@ -776,7 +898,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                   <span className="text-sm font-medium text-gray-900">Share Materials</span>
                 </button>
                 <button 
-                  onClick={shareQuiz}
+                  onClick={() => setShowResourceModal(true)}
                   className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
                 >
                   <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
@@ -787,16 +909,17 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               </div>
             </div>
 
-            {/* Chat */}
+            {/* Chat - Fixed height with internal scroll */}
             <div className="flex-1 flex flex-col min-h-0">
               <div className="p-4 border-b border-gray-200">
                 <h4 className="font-medium text-gray-900">Chat</h4>
               </div>
               
-              {/* Messages - Fixed height with scroll */}
+              {/* Messages Container - Fixed height with scroll */}
               <div 
                 ref={chatContainerRef}
-                className="flex-1 overflow-y-auto p-4 space-y-3 max-h-80"
+                className="flex-1 overflow-y-auto p-4 space-y-3"
+                style={{ maxHeight: '300px', minHeight: '200px' }}
               >
                 {messages.map((message) => (
                   <div key={message.id} className="flex space-x-3">
@@ -814,14 +937,20 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                           {new Date(message.created_at).toLocaleTimeString()}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-700 mt-1 break-words">{message.message}</p>
+                      <p className={`text-sm mt-1 break-words ${
+                        message.message_type === 'quiz_share' || message.message_type === 'system' 
+                          ? 'text-blue-700 font-medium' 
+                          : 'text-gray-700'
+                      }`}>
+                        {message.message}
+                      </p>
                     </div>
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Message Input */}
+              {/* Message Input - Fixed at bottom */}
               <div className="p-4 border-t border-gray-200">
                 <div className="flex items-center space-x-2">
                   <input
@@ -840,6 +969,119 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                     <Send className="w-4 h-4" />
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Resource Sharing Modal */}
+        {showResourceModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-2xl max-h-[80vh] overflow-y-auto relative">
+              <button
+                onClick={() => setShowResourceModal(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Share2 className="w-8 h-8 text-purple-600" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Share Resources</h2>
+                <p className="text-gray-600">Share your quizzes and study materials with the room</p>
+              </div>
+
+              <div className="space-y-8">
+                {/* Quizzes Section */}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                    <Brain className="w-5 h-5 mr-2 text-purple-600" />
+                    Your Quizzes ({userQuizzes.length})
+                  </h3>
+                  {userQuizzes.length === 0 ? (
+                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                      <p className="text-gray-600">No quizzes available to share</p>
+                      <button
+                        onClick={() => {
+                          setShowResourceModal(false);
+                          if (onNavigate) onNavigate('quiz-generator');
+                        }}
+                        className="mt-2 text-purple-600 hover:text-purple-700 font-medium"
+                      >
+                        Create your first quiz
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-48 overflow-y-auto">
+                      {userQuizzes.map((quiz) => (
+                        <div key={quiz.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900">{quiz.title}</h4>
+                            <p className="text-sm text-gray-600">{quiz.questions.length} questions</p>
+                          </div>
+                          <button
+                            onClick={() => shareQuizToRoom(quiz)}
+                            className="flex items-center space-x-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            <span>Share</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Study Materials Section */}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                    <FileText className="w-5 h-5 mr-2 text-blue-600" />
+                    Your Study Materials ({userMaterials.length})
+                  </h3>
+                  {userMaterials.length === 0 ? (
+                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                      <p className="text-gray-600">No study materials available to share</p>
+                      <button
+                        onClick={() => {
+                          setShowResourceModal(false);
+                          if (onNavigate) onNavigate('materials');
+                        }}
+                        className="mt-2 text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        Upload your first material
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-48 overflow-y-auto">
+                      {userMaterials.map((material) => (
+                        <div key={material.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900">{material.title}</h4>
+                            <p className="text-sm text-gray-600 capitalize">{material.file_type}</p>
+                          </div>
+                          <button
+                            onClick={() => shareMaterialToRoom(material)}
+                            className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            <span>Share</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-8 flex justify-end">
+                <button
+                  onClick={() => setShowResourceModal(false)}
+                  className="px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>

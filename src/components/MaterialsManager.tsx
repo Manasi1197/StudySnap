@@ -68,9 +68,10 @@ interface StudyMaterial {
 
 interface MaterialsManagerProps {
   onNavigate?: (page: string) => void;
+  initialMaterialId?: string; // New prop for opening specific material
 }
 
-const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
+const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate, initialMaterialId }) => {
   const { user } = useAuth();
   const [materials, setMaterials] = useState<StudyMaterial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,6 +97,19 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
       loadMaterials();
     }
   }, [user]);
+
+  // Auto-open specific material if initialMaterialId is provided
+  useEffect(() => {
+    if (initialMaterialId && materials.length > 0) {
+      const material = materials.find(m => m.id === initialMaterialId);
+      if (material) {
+        viewMaterial(material);
+        toast.success(`Opened material: ${material.title}`);
+      } else {
+        toast.error('Material not found or you do not have access to it');
+      }
+    }
+  }, [initialMaterialId, materials]);
 
   const loadMaterials = async () => {
     if (!user) return;

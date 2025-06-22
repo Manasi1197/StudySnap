@@ -273,6 +273,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         <QuizGenerator 
           onNavigate={handleSubPageNavigation} 
           initialGeneratedQuiz={quizGeneratorState?.quiz}
+          initialQuizId={subPageData?.quizId} // Pass quiz ID for direct loading
         />
       );
     }
@@ -281,7 +282,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
       case 'study-rooms':
         return <StudyRoom onNavigate={handleNavigation} />;
       case 'materials':
-        return <MaterialsManager onNavigate={handleNavigation} />;
+        return (
+          <MaterialsManager 
+            onNavigate={handleNavigation} 
+            initialMaterialId={subPageData?.materialId} // Pass material ID for direct opening
+          />
+        );
       case 'marketplace':
         return (
           <div className="text-center pt-20">

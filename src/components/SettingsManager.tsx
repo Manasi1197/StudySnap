@@ -1,41 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  User, 
-  Bell, 
-  Shield, 
-  Palette, 
-  Globe, 
-  Download, 
-  Trash2, 
-  Key, 
-  Mail, 
-  Phone, 
-  Camera, 
-  Save, 
-  X, 
-  Check, 
-  AlertTriangle, 
-  Eye, 
-  EyeOff, 
-  Moon, 
-  Sun, 
-  Volume2, 
-  VolumeX, 
-  Smartphone, 
-  Monitor, 
-  Tablet, 
-  Settings, 
-  Lock, 
-  Unlock, 
-  RefreshCw, 
-  LogOut, 
-  CreditCard, 
-  FileText, 
-  HelpCircle, 
-  ExternalLink,
-  ChevronRight,
-  Toggle
-} from 'lucide-react';
+import { User, Bell, Shield, Palette, Globe, Download, Trash2, Key, Mail, Phone, Camera, Save, X, Check, AlertTriangle, Eye, EyeOff, Moon, Sun, Volume2, VolumeX, Smartphone, Monitor, Tablet, Settings, Lock, Unlock, RefreshCw, LogOut, CreditCard, FileText, HelpCircle, ExternalLink, ChevronRight, ToggleLeft as Toggle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';

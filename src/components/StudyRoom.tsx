@@ -237,17 +237,35 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const loadRooms = async () => {
     try {
       setLoading(true);
+      
+      // Check if supabase client is properly initialized
+      if (!supabase) {
+        console.error('Supabase client not initialized');
+        toast.error('Database connection not available');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('study_rooms')
         .select('*')
         .eq('status', 'active')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        toast.error('Failed to load study rooms');
+        return;
+      }
+      
       setRooms(data || []);
     } catch (error: any) {
       console.error('Error loading rooms:', error);
-      toast.error('Failed to load study rooms');
+      // Check if it's a network error
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        toast.error('Network connection error. Please check your internet connection.');
+      } else {
+        toast.error('Failed to load study rooms');
+      }
     } finally {
       setLoading(false);
     }
@@ -257,27 +275,54 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!user) return;
 
     try {
-      // Load user's quizzes
-      const { data: quizzes, error: quizzesError } = await supabase
-        .from('quizzes')
-        .select('id, title, description, questions, flashcards, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      // Check if supabase client is properly initialized
+      if (!supabase) {
+        console.error('Supabase client not initialized');
+        return;
+      }
 
-      if (quizzesError) throw quizzesError;
-      setUserQuizzes(quizzes || []);
+      // Load user's quizzes with better error handling
+      try {
+        const { data: quizzes, error: quizzesError } = await supabase
+          .from('quizzes')
+          .select('id, title, description, questions, flashcards, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
 
-      // Load user's materials
-      const { data: materials, error: materialsError } = await supabase
-        .from('study_materials')
-        .select('id, title, content, file_type, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        if (quizzesError) {
+          console.error('Error loading quizzes:', quizzesError);
+        } else {
+          setUserQuizzes(quizzes || []);
+        }
+      } catch (quizError: any) {
+        console.error('Network error loading quizzes:', quizError);
+        // Don't show error toast for individual resource loading failures
+      }
 
-      if (materialsError) throw materialsError;
-      setUserMaterials(materials || []);
+      // Load user's materials with better error handling
+      try {
+        const { data: materials, error: materialsError } = await supabase
+          .from('study_materials')
+          .select('id, title, content, file_type, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (materialsError) {
+          console.error('Error loading materials:', materialsError);
+        } else {
+          setUserMaterials(materials || []);
+        }
+      } catch (materialError: any) {
+        console.error('Network error loading materials:', materialError);
+        // Don't show error toast for individual resource loading failures
+      }
+
     } catch (error: any) {
       console.error('Error loading user resources:', error);
+      // Only show error if it's a critical network issue
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        console.warn('Network connection issue while loading resources');
+      }
     }
   };
 

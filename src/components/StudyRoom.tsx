@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Users, 
   Plus, 
@@ -28,7 +28,22 @@ import {
   ArrowLeft,
   Hash,
   Eye,
-  EyeOff
+  EyeOff,
+  Palette,
+  Square,
+  Circle,
+  Triangle,
+  Minus,
+  Type,
+  Eraser,
+  RotateCcw,
+  Download,
+  Upload,
+  FileText,
+  Image as ImageIcon,
+  Trash2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -73,17 +88,49 @@ interface RoomMessage {
   user_name?: string;
 }
 
+interface SharedResource {
+  id: string;
+  room_id: string;
+  user_id: string;
+  content_type: 'quiz' | 'flashcard_set' | 'study_material' | 'file';
+  content_id: string;
+  shared_at: string;
+  user_name?: string;
+  content_title?: string;
+}
+
 interface StudyRoomProps {
   onNavigate?: (page: string) => void;
+}
+
+interface WhiteboardTool {
+  type: 'pen' | 'eraser' | 'line' | 'rectangle' | 'circle' | 'text';
+  color: string;
+  size: number;
+}
+
+interface WhiteboardElement {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  color: string;
+  size: number;
+  text?: string;
+  points?: { x: number; y: number }[];
 }
 
 const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [currentView, setCurrentView] = useState<'browse' | 'room' | 'create'>('browse');
+  const [activeTab, setActiveTab] = useState<'chat' | 'whiteboard' | 'resources'>('chat');
   const [rooms, setRooms] = useState<StudyRoom[]>([]);
   const [currentRoom, setCurrentRoom] = useState<StudyRoom | null>(null);
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [messages, setMessages] = useState<RoomMessage[]>([]);
+  const [sharedResources, setSharedResources] = useState<SharedResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
@@ -91,7 +138,23 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [newMessage, setNewMessage] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showResourceModal, setShowResourceModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
+
+  // Whiteboard state
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [whiteboardTool, setWhiteboardTool] = useState<WhiteboardTool>({
+    type: 'pen',
+    color: '#000000',
+    size: 2
+  });
+  const [whiteboardElements, setWhiteboardElements] = useState<WhiteboardElement[]>([]);
+
+  // Resource sharing state
+  const [availableQuizzes, setAvailableQuizzes] = useState<any[]>([]);
+  const [availableMaterials, setAvailableMaterials] = useState<any[]>([]);
+  const [showResourceDropdown, setShowResourceDropdown] = useState(false);
 
   // Available subjects for dropdown
   const subjects = [
@@ -131,6 +194,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   useEffect(() => {
     if (user) {
       loadRooms();
+      loadUserResources();
     }
   }, [user]);
 
@@ -176,6 +240,34 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       toast.error('Failed to load study rooms');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadUserResources = async () => {
+    if (!user) return;
+
+    try {
+      // Load user's quizzes
+      const { data: quizzes, error: quizzesError } = await supabase
+        .from('quizzes')
+        .select('id, title, description, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (quizzesError) throw quizzesError;
+      setAvailableQuizzes(quizzes || []);
+
+      // Load user's study materials
+      const { data: materials, error: materialsError } = await supabase
+        .from('study_materials')
+        .select('id, title, content, file_type, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (materialsError) throw materialsError;
+      setAvailableMaterials(materials || []);
+    } catch (error: any) {
+      console.error('Error loading user resources:', error);
     }
   };
 
@@ -366,6 +458,49 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           user_name: m.profiles?.full_name || 'Unknown User'
         }))
       );
+
+      // Load shared resources
+      const { data: resourcesData, error: resourcesError } = await supabase
+        .from('room_shared_content')
+        .select(`
+          *,
+          profiles!room_shared_content_user_id_fkey(full_name)
+        `)
+        .eq('room_id', roomId)
+        .order('shared_at', { ascending: false });
+
+      if (resourcesError) throw resourcesError;
+
+      // Enrich resources with content details
+      const enrichedResources = await Promise.all(
+        (resourcesData || []).map(async (resource) => {
+          let contentTitle = 'Unknown Resource';
+          
+          if (resource.content_type === 'quiz' && resource.content_id) {
+            const { data: quiz } = await supabase
+              .from('quizzes')
+              .select('title')
+              .eq('id', resource.content_id)
+              .single();
+            contentTitle = quiz?.title || 'Quiz';
+          } else if (resource.content_type === 'study_material' && resource.content_id) {
+            const { data: material } = await supabase
+              .from('study_materials')
+              .select('title')
+              .eq('id', resource.content_id)
+              .single();
+            contentTitle = material?.title || 'Study Material';
+          }
+
+          return {
+            ...resource,
+            user_name: resource.profiles?.full_name || 'Unknown User',
+            content_title: contentTitle
+          };
+        })
+      );
+
+      setSharedResources(enrichedResources);
     } catch (error: any) {
       console.error('Error loading room data:', error);
       toast.error('Failed to load room data');
@@ -395,12 +530,118 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     }
   };
 
+  const shareResource = async (contentType: 'quiz' | 'study_material', contentId: string) => {
+    if (!user || !currentRoom) return;
+
+    try {
+      const { error } = await supabase
+        .from('room_shared_content')
+        .insert({
+          room_id: currentRoom.id,
+          user_id: user.id,
+          content_type: contentType,
+          content_id: contentId
+        });
+
+      if (error) throw error;
+
+      toast.success('Resource shared successfully!');
+      setShowResourceModal(false);
+      await loadRoomData(currentRoom.id);
+    } catch (error: any) {
+      console.error('Error sharing resource:', error);
+      toast.error('Failed to share resource');
+    }
+  };
+
   const copyRoomCode = () => {
     if (currentRoom) {
       navigator.clipboard.writeText(currentRoom.room_code);
       toast.success('Room code copied to clipboard!');
     }
   };
+
+  // Whiteboard functions
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return;
+    
+    setIsDrawing(true);
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (whiteboardTool.type === 'pen') {
+      const newElement: WhiteboardElement = {
+        id: Date.now().toString(),
+        type: 'pen',
+        x,
+        y,
+        color: whiteboardTool.color,
+        size: whiteboardTool.size,
+        points: [{ x, y }]
+      };
+      setWhiteboardElements(prev => [...prev, newElement]);
+    }
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !canvasRef.current) return;
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (whiteboardTool.type === 'pen') {
+      setWhiteboardElements(prev => {
+        const newElements = [...prev];
+        const lastElement = newElements[newElements.length - 1];
+        if (lastElement && lastElement.points) {
+          lastElement.points.push({ x, y });
+        }
+        return newElements;
+      });
+    }
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const clearWhiteboard = () => {
+    setWhiteboardElements([]);
+  };
+
+  const redrawCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    whiteboardElements.forEach(element => {
+      ctx.strokeStyle = element.color;
+      ctx.lineWidth = element.size;
+      ctx.lineCap = 'round';
+
+      if (element.type === 'pen' && element.points) {
+        ctx.beginPath();
+        element.points.forEach((point, index) => {
+          if (index === 0) {
+            ctx.moveTo(point.x, point.y);
+          } else {
+            ctx.lineTo(point.x, point.y);
+          }
+        });
+        ctx.stroke();
+      }
+    });
+  };
+
+  useEffect(() => {
+    redrawCanvas();
+  }, [whiteboardElements]);
 
   const filteredRooms = rooms.filter(room => {
     const matchesSearch = room.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -427,6 +668,14 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       case 'host': return <Crown className="w-4 h-4 text-yellow-500" />;
       case 'moderator': return <Shield className="w-4 h-4 text-blue-500" />;
       default: return <User className="w-4 h-4 text-gray-500" />;
+    }
+  };
+
+  const getResourceIcon = (contentType: string) => {
+    switch (contentType) {
+      case 'quiz': return <Brain className="w-4 h-4 text-purple-500" />;
+      case 'study_material': return <FileText className="w-4 h-4 text-blue-500" />;
+      default: return <FileText className="w-4 h-4 text-gray-500" />;
     }
   };
 
@@ -602,6 +851,100 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     </div>
   );
 
+  // Resource Sharing Modal
+  const ResourceSharingModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Share Resources</h2>
+          <button
+            onClick={() => setShowResourceModal(false)}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="space-y-6">
+          {/* Quizzes Section */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Brain className="w-5 h-5 mr-2 text-purple-500" />
+              Your Quizzes
+            </h3>
+            {availableQuizzes.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">
+                No quizzes available. Create some quizzes first!
+              </p>
+            ) : (
+              <div className="space-y-3 max-h-48 overflow-y-auto">
+                {availableQuizzes.map((quiz) => (
+                  <div key={quiz.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">{quiz.title}</h4>
+                      <p className="text-sm text-gray-500">{quiz.description}</p>
+                      <p className="text-xs text-gray-400">
+                        Created {new Date(quiz.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => shareResource('quiz', quiz.id)}
+                      className="ml-4 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm"
+                    >
+                      Share
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Study Materials Section */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <FileText className="w-5 h-5 mr-2 text-blue-500" />
+              Your Study Materials
+            </h3>
+            {availableMaterials.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">
+                No study materials available. Upload some materials first!
+              </p>
+            ) : (
+              <div className="space-y-3 max-h-48 overflow-y-auto">
+                {availableMaterials.map((material) => (
+                  <div key={material.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">{material.title}</h4>
+                      <p className="text-sm text-gray-500 capitalize">{material.file_type} file</p>
+                      <p className="text-xs text-gray-400">
+                        Created {new Date(material.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => shareResource('study_material', material.id)}
+                      className="ml-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+                    >
+                      Share
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-8 flex justify-end">
+          <button
+            onClick={() => setShowResourceModal(false)}
+            className="px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -659,54 +1002,227 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               </button>
             </div>
           </div>
+
+          {/* Tab Navigation */}
+          <div className="flex items-center space-x-1 mt-4">
+            <button
+              onClick={() => setActiveTab('chat')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'chat'
+                  ? 'bg-blue-500 text-white'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4 inline mr-2" />
+              Chat
+            </button>
+            <button
+              onClick={() => setActiveTab('whiteboard')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'whiteboard'
+                  ? 'bg-blue-500 text-white'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              <Palette className="w-4 h-4 inline mr-2" />
+              Whiteboard
+            </button>
+            <button
+              onClick={() => setActiveTab('resources')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'resources'
+                  ? 'bg-blue-500 text-white'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              <Share2 className="w-4 h-4 inline mr-2" />
+              Resources
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 flex">
-          {/* Main Chat Area */}
+          {/* Main Content Area */}
           <div className="flex-1 flex flex-col">
-            {/* Messages */}
-            <div className="flex-1 p-6 overflow-y-auto">
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <div key={message.id} className="flex items-start space-x-3">
-                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
-                      {message.user_name?.charAt(0) || 'U'}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <span className="font-medium text-gray-900">{message.user_name}</span>
-                        <span className="text-xs text-gray-500">
-                          {new Date(message.created_at).toLocaleTimeString()}
-                        </span>
+            {/* Chat Tab */}
+            {activeTab === 'chat' && (
+              <>
+                {/* Messages */}
+                <div className="flex-1 p-6 overflow-y-auto">
+                  <div className="space-y-4">
+                    {messages.map((message) => (
+                      <div key={message.id} className="flex items-start space-x-3">
+                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                          {message.user_name?.charAt(0) || 'U'}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="font-medium text-gray-900">{message.user_name}</span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(message.created_at).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          <p className="text-gray-700">{message.message}</p>
+                        </div>
                       </div>
-                      <p className="text-gray-700">{message.message}</p>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
 
-            {/* Message Input */}
-            <div className="border-t border-gray-200 p-4">
-              <div className="flex items-center space-x-3">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                  className="flex-1 p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Type a message..."
-                  autoComplete="off"
-                />
-                <button
-                  onClick={sendMessage}
-                  disabled={!newMessage.trim()}
-                  className="p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+                {/* Message Input */}
+                <div className="border-t border-gray-200 p-4">
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="text"
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                      className="flex-1 p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Type a message..."
+                      autoComplete="off"
+                    />
+                    <button
+                      onClick={sendMessage}
+                      disabled={!newMessage.trim()}
+                      className="p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Whiteboard Tab */}
+            {activeTab === 'whiteboard' && (
+              <>
+                {/* Whiteboard Tools */}
+                <div className="border-b border-gray-200 p-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => setWhiteboardTool(prev => ({ ...prev, type: 'pen' }))}
+                        className={`p-2 rounded-lg ${whiteboardTool.type === 'pen' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}
+                      >
+                        <Type className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setWhiteboardTool(prev => ({ ...prev, type: 'eraser' }))}
+                        className={`p-2 rounded-lg ${whiteboardTool.type === 'eraser' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}
+                      >
+                        <Eraser className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <label className="text-sm text-gray-600">Color:</label>
+                      <input
+                        type="color"
+                        value={whiteboardTool.color}
+                        onChange={(e) => setWhiteboardTool(prev => ({ ...prev, color: e.target.value }))}
+                        className="w-8 h-8 rounded border border-gray-200"
+                      />
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <label className="text-sm text-gray-600">Size:</label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="20"
+                        value={whiteboardTool.size}
+                        onChange={(e) => setWhiteboardTool(prev => ({ ...prev, size: parseInt(e.target.value) }))}
+                        className="w-20"
+                      />
+                      <span className="text-sm text-gray-600 w-8">{whiteboardTool.size}px</span>
+                    </div>
+
+                    <button
+                      onClick={clearWhiteboard}
+                      className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Clear</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Whiteboard Canvas */}
+                <div className="flex-1 p-4">
+                  <canvas
+                    ref={canvasRef}
+                    width={800}
+                    height={600}
+                    className="border border-gray-200 rounded-lg bg-white cursor-crosshair w-full h-full"
+                    onMouseDown={startDrawing}
+                    onMouseMove={draw}
+                    onMouseUp={stopDrawing}
+                    onMouseLeave={stopDrawing}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Resources Tab */}
+            {activeTab === 'resources' && (
+              <>
+                <div className="border-b border-gray-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">Shared Resources</h3>
+                    <button
+                      onClick={() => setShowResourceModal(true)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Share Resource</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 p-6 overflow-y-auto">
+                  {sharedResources.length === 0 ? (
+                    <div className="text-center py-16">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Share2 className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No resources shared yet</h3>
+                      <p className="text-gray-600 mb-6">Share your quizzes and study materials with the room</p>
+                      <button
+                        onClick={() => setShowResourceModal(true)}
+                        className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors"
+                      >
+                        Share First Resource
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {sharedResources.map((resource) => (
+                        <div key={resource.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start space-x-4">
+                              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                                {getResourceIcon(resource.content_type)}
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-gray-900 mb-1">{resource.content_title}</h4>
+                                <p className="text-sm text-gray-600 mb-2 capitalize">{resource.content_type.replace('_', ' ')}</p>
+                                <div className="flex items-center space-x-4 text-xs text-gray-500">
+                                  <span>Shared by {resource.user_name}</span>
+                                  <span>{new Date(resource.shared_at).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <button className="text-gray-400 hover:text-gray-600 transition-colors">
+                              <ExternalLink className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Participants Sidebar */}
@@ -887,6 +1403,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       {/* Modals */}
       {showCreateModal && <CreateRoomModal />}
       {showJoinModal && <JoinRoomModal />}
+      {showResourceModal && <ResourceSharingModal />}
     </div>
   );
 };

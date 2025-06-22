@@ -53,6 +53,7 @@ import MarketplaceManager from './MarketplaceManager';
 import SettingsManager from './SettingsManager';
 import HelpCenter from './HelpCenter';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
 interface DashboardProps {
@@ -80,16 +81,44 @@ interface SearchResult {
   action: () => void;
 }
 
+interface UserStats {
+  totalQuizzes: number;
+  totalStudySessions: number;
+  totalMaterials: number;
+  totalTimeStudied: number;
+  currentStreak: number;
+  longestStreak: number;
+  totalAchievements: number;
+  totalPoints: number;
+  level: number;
+  averageScore: number;
+}
+
+interface RecentActivity {
+  id: string;
+  type: 'quiz' | 'material' | 'session' | 'achievement';
+  title: string;
+  description: string;
+  timestamp: string;
+  progress?: number;
+  status: 'completed' | 'in-progress' | 'new';
+  icon: string;
+  color: string;
+}
+
 const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavigate }) => {
   const { user, signOut } = useAuth();
   const [currentSubPage, setCurrentSubPage] = React.useState<string | null>(null);
   const [subPageData, setSubPageData] = React.useState<any>(null);
   const [quizGeneratorState, setQuizGeneratorState] = React.useState<any>(null);
   const [userProfile, setUserProfile] = React.useState<any>(null);
+  const [userStats, setUserStats] = React.useState<UserStats | null>(null);
+  const [recentActivity, setRecentActivity] = React.useState<RecentActivity[]>([]);
   const [showSearchModal, setShowSearchModal] = React.useState(false);
   const [showNotifications, setShowNotifications] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchResults, setSearchResults] = React.useState<SearchResult[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [notifications, setNotifications] = React.useState<Notification[]>([
     {
       id: '1',
@@ -142,49 +171,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     }
   ]);
 
-  // Mock search data
-  const mockSearchData: SearchResult[] = [
-    {
-      id: '1',
-      type: 'quiz',
-      title: 'Biology Fundamentals',
-      description: 'Complete quiz on cellular biology and genetics',
-      category: 'Science',
-      action: () => handleNavigation('quiz-generator')
-    },
-    {
-      id: '2',
-      type: 'material',
-      title: 'Chemistry Notes',
-      description: 'Organic chemistry study materials and formulas',
-      category: 'Science',
-      action: () => handleNavigation('materials')
-    },
-    {
-      id: '3',
-      type: 'room',
-      title: 'Math Study Group',
-      description: 'Collaborative calculus problem solving',
-      category: 'Mathematics',
-      action: () => handleNavigation('study-rooms')
-    },
-    {
-      id: '4',
-      type: 'achievement',
-      title: 'Study Streak Master',
-      description: 'Maintain a 30-day study streak',
-      category: 'Achievement',
-      action: () => handleNavigation('achievements')
-    },
-    {
-      id: '5',
-      type: 'quiz',
-      title: 'History Timeline',
-      description: 'World War II events and dates quiz',
-      category: 'History',
-      action: () => handleNavigation('quiz-generator')
+  // Load real-time data
+  React.useEffect(() => {
+    if (user) {
+      loadUserData();
     }
-  ];
+  }, [user]);
 
   // Listen for profile updates
   React.useEffect(() => {
@@ -198,6 +190,150 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
       window.removeEventListener('profileUpdated', handleProfileUpdate as EventListener);
     };
   }, []);
+
+  const loadUserData = async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+
+      // Load user profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (profileData) {
+        setUserProfile(profileData);
+      }
+
+      // Load user progress
+      const { data: progressData } = await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      // Load quiz count
+      const { count: quizCount } = await supabase
+        .from('quizzes')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
+      // Load study sessions
+      const { data: sessionsData } = await supabase
+        .from('study_sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('completed_at', { ascending: false });
+
+      // Load materials count
+      const { count: materialsCount } = await supabase
+        .from('study_materials')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
+      // Load recent quizzes for activity
+      const { data: recentQuizzes } = await supabase
+        .from('quizzes')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      // Load recent materials for activity
+      const { data: recentMaterials } = await supabase
+        .from('study_materials')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      // Calculate stats
+      const totalSessions = sessionsData?.length || 0;
+      const totalTimeStudied = sessionsData?.reduce((sum, session) => sum + (session.time_spent || 0), 0) || 0;
+      const averageScore = totalSessions > 0 
+        ? Math.round(sessionsData.reduce((sum, session) => sum + (session.score / session.total_questions * 100), 0) / totalSessions)
+        : 0;
+
+      // Calculate achievements (mock for now)
+      const totalAchievements = Math.min(Math.floor((quizCount || 0) / 2) + Math.floor(totalSessions / 3), 15);
+      const totalPoints = totalAchievements * 50 + (quizCount || 0) * 10 + totalSessions * 5;
+      const level = Math.floor(totalPoints / 100) + 1;
+
+      const stats: UserStats = {
+        totalQuizzes: quizCount || 0,
+        totalStudySessions: totalSessions,
+        totalMaterials: materialsCount || 0,
+        totalTimeStudied: Math.floor(totalTimeStudied / 60), // Convert to minutes
+        currentStreak: progressData?.current_streak || 0,
+        longestStreak: progressData?.longest_streak || 0,
+        totalAchievements,
+        totalPoints,
+        level,
+        averageScore
+      };
+
+      setUserStats(stats);
+
+      // Build recent activity
+      const activity: RecentActivity[] = [];
+
+      // Add recent quizzes
+      recentQuizzes?.forEach(quiz => {
+        activity.push({
+          id: quiz.id,
+          type: 'quiz',
+          title: quiz.title,
+          description: `Created ${quiz.questions?.length || 0} questions`,
+          timestamp: quiz.created_at,
+          status: 'completed',
+          icon: '🧠',
+          color: 'bg-purple-500'
+        });
+      });
+
+      // Add recent materials
+      recentMaterials?.forEach(material => {
+        activity.push({
+          id: material.id,
+          type: 'material',
+          title: material.title,
+          description: `${material.file_type?.toUpperCase()} file uploaded`,
+          timestamp: material.created_at,
+          status: material.processing_status === 'completed' ? 'completed' : 'in-progress',
+          icon: material.file_type === 'image' ? '🖼️' : material.file_type === 'pdf' ? '📄' : '📝',
+          color: 'bg-blue-500'
+        });
+      });
+
+      // Add recent sessions
+      sessionsData?.slice(0, 3).forEach(session => {
+        const percentage = Math.round((session.score / session.total_questions) * 100);
+        activity.push({
+          id: session.id,
+          type: 'session',
+          title: 'Quiz Session Completed',
+          description: `Scored ${percentage}% on ${session.total_questions} questions`,
+          timestamp: session.completed_at,
+          progress: percentage,
+          status: 'completed',
+          icon: percentage >= 80 ? '🎉' : percentage >= 60 ? '👍' : '📚',
+          color: percentage >= 80 ? 'bg-green-500' : percentage >= 60 ? 'bg-yellow-500' : 'bg-orange-500'
+        });
+      });
+
+      // Sort by timestamp and take most recent
+      activity.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setRecentActivity(activity.slice(0, 8));
+
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Get current user display info
   const getUserDisplayInfo = () => {
@@ -216,7 +352,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
   const displayInfo = getUserDisplayInfo();
 
   // Search functionality
-  const handleSearch = (query: string) => {
+  const handleSearch = async (query: string) => {
     setSearchQuery(query);
     
     if (query.trim() === '') {
@@ -224,14 +360,70 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
       return;
     }
 
-    // Filter mock data based on search query
-    const filtered = mockSearchData.filter(item =>
-      item.title.toLowerCase().includes(query.toLowerCase()) ||
-      item.description.toLowerCase().includes(query.toLowerCase()) ||
-      item.category.toLowerCase().includes(query.toLowerCase())
-    );
+    try {
+      const results: SearchResult[] = [];
 
-    setSearchResults(filtered);
+      // Search quizzes
+      const { data: quizzes } = await supabase
+        .from('quizzes')
+        .select('id, title, description')
+        .eq('user_id', user?.id)
+        .ilike('title', `%${query}%`)
+        .limit(3);
+
+      quizzes?.forEach(quiz => {
+        results.push({
+          id: quiz.id,
+          type: 'quiz',
+          title: quiz.title,
+          description: quiz.description || 'Quiz',
+          category: 'Quiz',
+          action: () => handleNavigation('quiz-generator')
+        });
+      });
+
+      // Search materials
+      const { data: materials } = await supabase
+        .from('study_materials')
+        .select('id, title, file_type')
+        .eq('user_id', user?.id)
+        .ilike('title', `%${query}%`)
+        .limit(3);
+
+      materials?.forEach(material => {
+        results.push({
+          id: material.id,
+          type: 'material',
+          title: material.title,
+          description: `${material.file_type?.toUpperCase()} file`,
+          category: 'Material',
+          action: () => handleNavigation('materials')
+        });
+      });
+
+      // Search study rooms
+      const { data: rooms } = await supabase
+        .from('study_rooms')
+        .select('id, name, description, subject')
+        .ilike('name', `%${query}%`)
+        .limit(3);
+
+      rooms?.forEach(room => {
+        results.push({
+          id: room.id,
+          type: 'room',
+          title: room.name,
+          description: room.description || room.subject,
+          category: 'Study Room',
+          action: () => handleNavigation('study-rooms')
+        });
+      });
+
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    }
   };
 
   const handleSearchSelect = (result: SearchResult) => {
@@ -300,6 +492,17 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
       case 'user': return User;
       default: return Search;
     }
+  };
+
+  const formatTimeAgo = (timestamp: string) => {
+    const now = new Date();
+    const time = new Date(timestamp);
+    const diffInMinutes = Math.floor((now.getTime() - time.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
   };
 
   const handleSignOut = async () => {
@@ -389,93 +592,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     { icon: HelpCircle, label: 'Help Center', page: 'help' },
   ];
 
-  const statsCards = [
-    {
-      number: '24',
-      label: 'Quizzes Created',
-      icon: Brain,
-      color: 'bg-teal-500',
-      action: 'View details'
-    },
-    {
-      number: '56',
-      label: 'Study Sessions',
-      icon: Clock,
-      color: 'bg-purple-500',
-      action: 'View details'
-    },
-    {
-      number: '17',
-      label: 'Achievements',
-      icon: Trophy,
-      color: 'bg-orange-500',
-      action: 'View details'
-    }
-  ];
-
-  const continuelearning = [
-    {
-      title: 'Biology Fundamentals',
-      level: 'Advanced',
-      duration: '5 hours',
-      progress: 30,
-      status: 'In Progress',
-      icon: '🧬',
-      color: 'bg-cyan-500'
-    },
-    {
-      title: 'Calculus Mastery',
-      level: 'Intermediate',
-      duration: '6 hours',
-      progress: 70,
-      status: 'In Progress',
-      icon: '📐',
-      color: 'bg-purple-500'
-    },
-    {
-      title: 'Chemistry Basics',
-      level: 'Beginner',
-      duration: '7 hours',
-      progress: 100,
-      status: 'Completed',
-      icon: '⚗️',
-      color: 'bg-gray-800'
-    }
-  ];
-
-  const recommendations = [
-    {
-      title: 'AI Quiz Workshop',
-      description: 'Master your skills in creating AI-powered quizzes and learn how to optimize learning outcomes.',
-      level: 'Advanced',
-      duration: '6 hours',
-      rating: 4.9,
-      reviews: '1.85K',
-      color: 'bg-teal-600',
-      icon: '🎯'
-    },
-    {
-      title: 'Study Room Facilitation',
-      description: 'Procreate Dreams has transformed my ability to make animations from my art. Yet when I first opened...',
-      level: 'Beginner',
-      duration: '6 hours',
-      rating: 4.9,
-      reviews: '1.89K',
-      color: 'bg-orange-500',
-      icon: '🎨'
-    },
-    {
-      title: 'Monetization Strategies',
-      description: 'Master your skills in selling study materials and learn how to promote collaboration and find...',
-      level: 'Intermediate',
-      duration: '6 hours',
-      rating: 4.9,
-      reviews: '1.89K',
-      color: 'bg-blue-600',
-      icon: '💰'
-    }
-  ];
-
   const handleNavigation = (page: string) => {
     if (onNavigate) {
       onNavigate(page);
@@ -544,123 +660,156 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
       default:
         return (
           <div className="space-y-8">
-            {/* Stats Cards */}
+            {/* Real-time Stats Cards */}
             <div className="grid md:grid-cols-3 gap-6">
-              {statsCards.map((card, index) => {
-                const Icon = card.icon;
-                return (
-                  <div key={index} className="bg-white rounded-xl p-6 border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className={`w-12 h-12 ${card.color} rounded-xl flex items-center justify-center`}>
-                        <Icon className="w-6 h-6 text-white" />
-                      </div>
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900 mb-1">{card.number}</div>
-                    <div className="text-sm text-gray-600 mb-4">{card.label}</div>
-                    <button className="flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                      {card.action}
-                      <ArrowRight className="w-4 h-4 ml-1" />
-                    </button>
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-teal-500 rounded-xl flex items-center justify-center">
+                    <Brain className="w-6 h-6 text-white" />
                   </div>
-                );
-              })}
+                </div>
+                <div className="text-3xl font-bold text-gray-900 mb-1">{userStats?.totalQuizzes || 0}</div>
+                <div className="text-sm text-gray-600 mb-4">Quizzes Created</div>
+                <button 
+                  onClick={() => handleNavigation('quiz-generator')}
+                  className="flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Create new quiz
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </button>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold text-gray-900 mb-1">{userStats?.totalStudySessions || 0}</div>
+                <div className="text-sm text-gray-600 mb-4">Study Sessions</div>
+                <button className="flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors">
+                  {userStats?.totalTimeStudied || 0} minutes studied
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </button>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center">
+                    <Trophy className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold text-gray-900 mb-1">{userStats?.totalAchievements || 0}</div>
+                <div className="text-sm text-gray-600 mb-4">Achievements</div>
+                <button 
+                  onClick={() => handleNavigation('achievements')}
+                  className="flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Level {userStats?.level || 1} • {userStats?.totalPoints || 0} points
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </button>
+              </div>
             </div>
 
-            {/* Continue Learning */}
+            {/* Recent Activity */}
             <div className="bg-white rounded-xl border border-gray-200">
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-gray-900">Continue Learning</h2>
+                  <h2 className="text-xl font-bold text-gray-900">Recent Activity</h2>
                   <button className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                    See All
+                    View All
                   </button>
                 </div>
               </div>
               <div className="p-6">
-                <div className="space-y-4">
-                  <div className="grid grid-cols-4 gap-4 text-sm font-medium text-gray-500 pb-2">
-                    <div>Course Name</div>
-                    <div>Progress</div>
-                    <div>Status</div>
-                    <div></div>
+                {loading ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="animate-pulse flex items-center space-x-4">
+                        <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  {continuelearning.map((course, index) => (
-                    <div key={index} className="grid grid-cols-4 gap-4 items-center py-4 border-t border-gray-100">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-10 h-10 ${course.color} rounded-lg flex items-center justify-center text-white text-lg`}>
-                          {course.icon}
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-900">{course.title}</div>
-                          <div className="text-sm text-gray-500">{course.level} • {course.duration}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <div className="flex-1 bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-teal-500 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${course.progress}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-medium text-gray-600">{course.progress}%</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        {course.status === 'Completed' ? (
-                          <CheckCircle className="w-4 h-4 text-green-500" />
-                        ) : (
-                          <Circle className="w-4 h-4 text-orange-500" />
-                        )}
-                        <span className={`text-sm font-medium ${
-                          course.status === 'Completed' ? 'text-green-600' : 'text-orange-600'
-                        }`}>
-                          {course.status}
-                        </span>
-                      </div>
-                      <div className="flex justify-end">
-                        <ArrowRight className="w-5 h-5 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
-                      </div>
+                ) : recentActivity.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <TrendingUp className="w-8 h-8 text-gray-400" />
                     </div>
-                  ))}
-                </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No recent activity</h3>
+                    <p className="text-gray-600 mb-4">Start creating quizzes and studying to see your activity here!</p>
+                    <button 
+                      onClick={() => handleNavigation('quiz-generator')}
+                      className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      Create Your First Quiz
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentActivity.map((activity) => (
+                      <div key={activity.id} className="flex items-center space-x-4 p-4 hover:bg-gray-50 rounded-lg transition-colors">
+                        <div className={`w-10 h-10 ${activity.color} rounded-lg flex items-center justify-center text-white text-lg`}>
+                          {activity.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium text-gray-900 truncate">{activity.title}</h4>
+                            <span className="text-sm text-gray-500">{formatTimeAgo(activity.timestamp)}</span>
+                          </div>
+                          <p className="text-sm text-gray-600 truncate">{activity.description}</p>
+                          {activity.progress !== undefined && (
+                            <div className="mt-2 flex items-center space-x-2">
+                              <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                <div 
+                                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                                  style={{ width: `${activity.progress}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-xs text-gray-500">{activity.progress}%</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {activity.status === 'completed' ? (
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          ) : activity.status === 'in-progress' ? (
+                            <Clock className="w-5 h-5 text-orange-500" />
+                          ) : (
+                            <Circle className="w-5 h-5 text-blue-500" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Recommended for you */}
+            {/* Study Insights */}
             <div className="bg-white rounded-xl border border-gray-200">
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-gray-900">Recommended for you</h2>
-                  <button className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                    See All
-                  </button>
+                  <h2 className="text-xl font-bold text-gray-900">Study Insights</h2>
                 </div>
               </div>
               <div className="p-6">
                 <div className="grid md:grid-cols-3 gap-6">
-                  {recommendations.map((rec, index) => (
-                    <div key={index} className="group cursor-pointer">
-                      <div className={`${rec.color} rounded-xl p-8 mb-4 group-hover:scale-105 transition-transform duration-300`}>
-                        <div className="text-4xl mb-4">{rec.icon}</div>
-                      </div>
-                      <h3 className="font-bold text-gray-900 mb-2 group-hover:text-teal-600 transition-colors">
-                        {rec.title}
-                      </h3>
-                      <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                        {rec.description}
-                      </p>
-                      <div className="flex items-center justify-between text-sm text-gray-500">
-                        <div className="flex items-center space-x-4">
-                          <span>{rec.level}</span>
-                          <span>{rec.duration}</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                          <span className="font-medium">{rec.rating}</span>
-                          <span>({rec.reviews})</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600 mb-2">{userStats?.averageScore || 0}%</div>
+                    <div className="text-sm text-gray-600">Average Score</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600 mb-2">{userStats?.currentStreak || 0}</div>
+                    <div className="text-sm text-gray-600">Current Streak</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600 mb-2">{userStats?.totalMaterials || 0}</div>
+                    <div className="text-sm text-gray-600">Study Materials</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -681,7 +830,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
             <Search className="w-6 h-6 text-gray-400" />
             <input
               type="text"
-              placeholder="Search quizzes, materials, rooms, achievements..."
+              placeholder="Search quizzes, materials, rooms..."
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
               className="flex-1 text-lg border-none outline-none"
@@ -705,7 +854,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
             <div className="p-8 text-center">
               <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Search StudySnap</h3>
-              <p className="text-gray-600">Find quizzes, study materials, rooms, and more</p>
+              <p className="text-gray-600">Find your quizzes, study materials, and more</p>
             </div>
           ) : searchResults.length === 0 ? (
             <div className="p-8 text-center">
@@ -944,6 +1093,11 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
                 <h1 className="text-2xl font-bold text-gray-900">
                   Welcome back, {displayInfo.name}! 👋
                 </h1>
+                {userStats && (
+                  <p className="text-gray-600">
+                    Level {userStats.level} • {userStats.totalPoints} points • {userStats.currentStreak} day streak
+                  </p>
+                )}
               </div>
               <div className="flex items-center space-x-4">
                 {/* Search Button */}
@@ -1014,7 +1168,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
                     {/* Progress Card */}
                     <div className="bg-white rounded-xl p-6 border border-gray-200">
                       <div className="flex items-center justify-between mb-6">
-                        <h3 className="font-bold text-gray-900">Progress</h3>
+                        <h3 className="font-bold text-gray-900">Your Progress</h3>
                         <button className="p-1">
                           <MoreHorizontal className="w-4 h-4 text-gray-400" />
                         </button>
@@ -1028,30 +1182,40 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
                         <h4 className="font-bold text-gray-900">
                           {displayInfo.name}
                         </h4>
-                        <p className="text-sm text-gray-500">Basic Member</p>
+                        <p className="text-sm text-gray-500">Level {userStats?.level || 1} • {userStats?.totalPoints || 0} points</p>
                       </div>
                       <div className="mb-6">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-2xl font-bold text-gray-900">30</span>
+                          <span className="text-2xl font-bold text-gray-900">{userStats?.totalTimeStudied || 0}</span>
                           <select className="text-sm text-gray-500 border-none bg-transparent">
                             <option>This week</option>
                           </select>
                         </div>
-                        <p className="text-sm text-gray-500">Hours spend</p>
+                        <p className="text-sm text-gray-500">Minutes studied</p>
                       </div>
-                      <div className="space-y-2">
-                        {[30, 15, 25, 35, 28, 32, 30].map((height, index) => (
-                          <div key={index} className="flex items-end space-x-1">
-                            <div 
-                              className="bg-teal-500 rounded-sm w-8 transition-all duration-300 hover:bg-teal-600"
-                              style={{ height: `${height}px` }}
-                            ></div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex justify-between text-xs text-gray-400 mt-2">
-                        <span>Sun 15</span>
-                        <span>Sat 20</span>
+                      
+                      {/* Progress visualization */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Study Streak</span>
+                          <span className="font-medium">{userStats?.currentStreak || 0} days</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-orange-500 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${Math.min((userStats?.currentStreak || 0) / 30 * 100, 100)}%` }}
+                          ></div>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Average Score</span>
+                          <span className="font-medium">{userStats?.averageScore || 0}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${userStats?.averageScore || 0}%` }}
+                          ></div>
+                        </div>
                       </div>
                     </div>
 

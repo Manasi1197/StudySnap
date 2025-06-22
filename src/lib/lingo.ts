@@ -1,5 +1,5 @@
 // Lingo.dev API integration for translation services
-const LINGO_API_KEY = 'api_przi40vhvtidf7uri0klbece';
+const LINGO_API_KEY = import.meta.env.VITE_LINGO_API_KEY;
 const LINGO_API_BASE_URL = 'https://api.lingo.dev/v1';
 
 export interface LingoTranslationRequest {
@@ -84,7 +84,13 @@ export async function translateText(
   }
 
   if (!LINGO_API_KEY) {
-    throw new Error('Lingo API key is not configured');
+    console.warn('⚠️ Lingo API key is not configured, returning original text');
+    return {
+      translatedText: text,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+      confidence: 0
+    };
   }
 
   console.log('🌐 Starting translation with Lingo.dev...', {
@@ -123,7 +129,14 @@ export async function translateText(
         errorMessage = `Translation API error: ${response.status}`;
       }
       
-      throw new Error(errorMessage);
+      // Return original text instead of throwing error
+      console.warn('⚠️ Translation failed, returning original text');
+      return {
+        translatedText: text,
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
+        confidence: 0
+      };
     }
 
     const data = await response.json();
@@ -139,15 +152,14 @@ export async function translateText(
   } catch (error: any) {
     console.error('❌ Translation error:', error);
     
-    if (error.message?.includes('API key')) {
-      throw new Error('Invalid Lingo API key. Please check your configuration.');
-    } else if (error.message?.includes('Rate limit')) {
-      throw new Error('Translation rate limit exceeded. Please wait and try again.');
-    } else if (error.message?.includes('quota')) {
-      throw new Error('Translation quota exceeded. Please check your Lingo account.');
-    }
-    
-    throw new Error(`Translation failed: ${error.message || 'Unknown error'}`);
+    // Return original text instead of throwing error to prevent app crashes
+    console.warn('⚠️ Translation failed, returning original text');
+    return {
+      translatedText: text,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+      confidence: 0
+    };
   }
 }
 
@@ -193,10 +205,15 @@ export async function testLingoConnection(): Promise<boolean> {
   try {
     console.log('🔍 Testing Lingo API connection...');
     
+    if (!LINGO_API_KEY) {
+      console.warn('⚠️ Lingo API key is not configured');
+      return false;
+    }
+    
     const testResult = await translateText('Hello, world!', 'es', 'en');
     
     console.log('✅ Lingo API test successful:', testResult);
-    return true;
+    return testResult.confidence > 0;
   } catch (error) {
     console.error('❌ Lingo API test failed:', error);
     return false;

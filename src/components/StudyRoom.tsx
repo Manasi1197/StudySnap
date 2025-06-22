@@ -165,14 +165,18 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       // Generate unique room code
       const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
+      // Prepare the room data, ensuring scheduled_for is null if empty
+      const roomData = {
+        ...createForm,
+        created_by: user.id,
+        room_code: roomCode,
+        status: createForm.scheduled_for ? 'scheduled' : 'active',
+        scheduled_for: createForm.scheduled_for || null // Convert empty string to null
+      };
+
       const { data: room, error } = await supabase
         .from('study_rooms')
-        .insert({
-          ...createForm,
-          created_by: user.id,
-          room_code: roomCode,
-          status: createForm.scheduled_for ? 'scheduled' : 'active'
-        })
+        .insert(roomData)
         .select()
         .single();
 

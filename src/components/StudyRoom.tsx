@@ -42,7 +42,8 @@ import {
   Zap,
   AlertCircle,
   CheckCircle,
-  Loader2
+  Loader2,
+  Play
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -94,6 +95,19 @@ interface RoomMessage {
   };
 }
 
+interface SharedContent {
+  id: string;
+  room_id: string;
+  user_id: string;
+  content_type: string;
+  content_id: string;
+  shared_at: string;
+  profiles?: {
+    full_name: string;
+    email: string;
+  };
+}
+
 interface Quiz {
   id: string;
   title: string;
@@ -122,6 +136,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [currentRoom, setCurrentRoom] = useState<StudyRoom | null>(null);
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [messages, setMessages] = useState<RoomMessage[]>([]);
+  const [sharedContent, setSharedContent] = useState<SharedContent[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -279,6 +294,22 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
       if (messagesError) throw messagesError;
       setMessages(messagesData || []);
+
+      // Load shared content
+      const { data: sharedData, error: sharedError } = await supabase
+        .from('room_shared_content')
+        .select(`
+          *,
+          profiles (
+            full_name,
+            email
+          )
+        `)
+        .eq('room_id', currentRoom.id)
+        .order('shared_at', { ascending: false });
+
+      if (sharedError) throw sharedError;
+      setSharedContent(sharedData || []);
     } catch (error: any) {
       console.error('Error loading room data:', error);
     }
@@ -436,6 +467,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       setCurrentView('browse');
       setParticipants([]);
       setMessages([]);
+      setSharedContent([]);
       toast.success('Left study room');
     } catch (error: any) {
       console.error('Error leaving room:', error);
@@ -497,8 +529,8 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         .insert({
           room_id: currentRoom.id,
           user_id: user.id,
-          message: `📝 Shared quiz: "${quiz.title}"`,
-          message_type: 'system'
+          message: `📝 Shared quiz: "${quiz.title}" - Click to access`,
+          message_type: 'quiz_share'
         });
 
       if (messageError) throw messageError;
@@ -545,7 +577,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         .insert({
           room_id: currentRoom.id,
           user_id: user.id,
-          message: `📚 Shared material: "${material.title}"`,
+          message: `📚 Shared material: "${material.title}" - Click to access`,
           message_type: 'system'
         });
 
@@ -575,6 +607,41 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       await shareQuiz();
     } else {
       await shareMaterial();
+    }
+  };
+
+  const handleResourceClick = async (contentType: string, contentId: string) => {
+    if (!onNavigate) {
+      toast.error('Navigation not available');
+      return;
+    }
+
+    try {
+      if (contentType === 'quiz') {
+        // Get quiz data and navigate to quiz generator
+        const { data: quizData, error } = await supabase
+          .from('quizzes')
+          .select('*')
+          .eq('id', contentId)
+          .single();
+
+        if (error || !quizData) {
+          toast.error('Quiz not found or access denied');
+          return;
+        }
+
+        // Store quiz data for navigation
+        localStorage.setItem('shared_quiz_data', JSON.stringify(quizData));
+        onNavigate('quiz-generator');
+        toast.success(`Opening shared quiz: "${quizData.title}"`);
+      } else if (contentType === 'study_material') {
+        // Navigate to materials section
+        onNavigate('materials');
+        toast.success('Opening Materials section');
+      }
+    } catch (error: any) {
+      console.error('Error accessing shared resource:', error);
+      toast.error('Failed to access shared resource');
     }
   };
 
@@ -664,6 +731,17 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       case 'advanced': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const getResourceTitle = (contentType: string, contentId: string) => {
+    if (contentType === 'quiz') {
+      const quiz = userQuizzes.find(q => q.id === contentId);
+      return quiz?.title || 'Unknown Quiz';
+    } else if (contentType === 'study_material') {
+      const material = userMaterials.find(m => m.id === contentId);
+      return material?.title || 'Unknown Material';
+    }
+    return 'Unknown Resource';
   };
 
   if (currentView === 'room' && currentRoom) {
@@ -796,7 +874,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                 <h3 className="font-medium text-gray-900">Chat</h3>
               </div>
               
-              {/* Messages Container with Fixed Height and Scroll - FINAL FIX */}
+              {/* Messages Container with Fixed Height and Scroll */}
               <div 
                 ref={chatContainerRef}
                 className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"
@@ -818,7 +896,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                         </span>
                       </div>
                       <p className={`text-sm mt-1 ${
-                        message.message_type === 'system' 
+                        message.message_type === 'system' || message.message_type === 'quiz_share'
                           ? 'text-blue-600 font-medium' 
                           : 'text-gray-700'
                       }`}>
@@ -827,6 +905,44 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                     </div>
                   </div>
                 ))}
+
+                {/* Shared Resources Section */}
+                {sharedContent.length > 0 && (
+                  <div className="border-t border-gray-200 pt-4 mt-4">
+                    <h4 className="text-sm font-medium text-gray-900 mb-3">Shared Resources</h4>
+                    <div className="space-y-2">
+                      {sharedContent.map((content) => (
+                        <div key={content.id} className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              {content.content_type === 'quiz' ? (
+                                <Brain className="w-4 h-4 text-blue-600" />
+                              ) : (
+                                <FileText className="w-4 h-4 text-blue-600" />
+                              )}
+                              <div>
+                                <p className="text-sm font-medium text-blue-900">
+                                  {getResourceTitle(content.content_type, content.content_id)}
+                                </p>
+                                <p className="text-xs text-blue-700">
+                                  Shared by {content.profiles?.full_name || content.profiles?.email || 'Unknown'}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleResourceClick(content.content_type, content.content_id)}
+                              className="flex items-center space-x-1 px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-xs"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              <span>Open</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Invisible element to scroll to */}
                 <div ref={messagesEndRef} />
               </div>
@@ -912,21 +1028,30 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                     className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">Choose a resource...</option>
-                    <optgroup label="Quizzes">
-                      {userQuizzes.map((quiz) => (
-                        <option key={quiz.id} value={quiz.id}>
-                          📝 {quiz.title}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Study Materials">
-                      {userMaterials.map((material) => (
-                        <option key={material.id} value={material.id}>
-                          📚 {material.title}
-                        </option>
-                      ))}
-                    </optgroup>
+                    {userQuizzes.length > 0 && (
+                      <optgroup label="Your Quizzes">
+                        {userQuizzes.map((quiz) => (
+                          <option key={quiz.id} value={quiz.id}>
+                            📝 {quiz.title}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {userMaterials.length > 0 && (
+                      <optgroup label="Your Study Materials">
+                        {userMaterials.map((material) => (
+                          <option key={material.id} value={material.id}>
+                            📚 {material.title}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
+                  {userQuizzes.length === 0 && userMaterials.length === 0 && (
+                    <p className="text-sm text-gray-500 mt-2">
+                      You don't have any quizzes or materials to share. Create some first!
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex space-x-4">
@@ -938,7 +1063,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                   </button>
                   <button
                     onClick={handleShare}
-                    disabled={!selectedResource || sharingResource}
+                    disabled={!selectedResource || sharingResource || (userQuizzes.length === 0 && userMaterials.length === 0)}
                     className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                   >
                     {sharingResource ? (

@@ -185,7 +185,6 @@ export function useQuizGenerator(initialQuiz?: GeneratedQuiz) {
     textInput,
     setTextInput,
     generatedQuiz,
-    setGeneratedQuiz, // Export this for manual setting
     isGenerating,
     processFile,
     generateQuiz,

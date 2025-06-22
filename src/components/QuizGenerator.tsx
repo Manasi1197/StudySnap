@@ -35,25 +35,17 @@ import {
 } from 'lucide-react';
 import { useQuizGenerator } from '../hooks/useQuizGenerator';
 import { generateAudioWithElevenLabs, testElevenLabsApiKey, updateElevenLabsApiKey } from '../lib/elevenlabs';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../hooks/useAuth';
 import ApiKeyManager from './ApiKeyManager';
 import toast from 'react-hot-toast';
 
 interface QuizGeneratorProps {
   onNavigate?: (page: string, data?: any) => void;
   initialGeneratedQuiz?: any;
-  initialQuizId?: string; // New prop for loading specific quiz
 }
 
-const QuizGenerator: React.FC<QuizGeneratorProps> = ({ 
-  onNavigate, 
-  initialGeneratedQuiz,
-  initialQuizId 
-}) => {
-  const { user } = useAuth();
+const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGeneratedQuiz }) => {
   const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'review'>(
-    initialGeneratedQuiz || initialQuizId ? 'review' : 'upload'
+    initialGeneratedQuiz ? 'review' : 'upload'
   );
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [showSettings, setShowSettings] = useState(false);
@@ -64,7 +56,6 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({
   const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
   const [audioGenerationProgress, setAudioGenerationProgress] = useState<string>('');
   const [isTestingApiKey, setIsTestingApiKey] = useState(false);
-  const [loadingSpecificQuiz, setLoadingSpecificQuiz] = useState(false);
   const [quizSettings, setQuizSettings] = useState({
     questionCount: 10,
     difficulty: 'mixed',
@@ -83,62 +74,15 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({
     generateQuiz,
     addFiles,
     removeFile,
-    reset: resetQuizGeneratorHook,
-    setGeneratedQuiz // Add this to manually set quiz
+    reset: resetQuizGeneratorHook
   } = useQuizGenerator(initialGeneratedQuiz);
-
-  // Load specific quiz if initialQuizId is provided
-  useEffect(() => {
-    if (initialQuizId && user) {
-      loadSpecificQuiz(initialQuizId);
-    }
-  }, [initialQuizId, user]);
-
-  const loadSpecificQuiz = async (quizId: string) => {
-    try {
-      setLoadingSpecificQuiz(true);
-      
-      const { data, error } = await supabase
-        .from('quizzes')
-        .select('*')
-        .eq('id', quizId)
-        .eq('user_id', user?.id) // Ensure user owns the quiz
-        .single();
-
-      if (error) throw error;
-
-      if (data) {
-        // Transform the database quiz to match our GeneratedQuiz interface
-        const transformedQuiz = {
-          id: data.id,
-          title: data.title,
-          description: data.description,
-          questions: data.questions,
-          flashcards: data.flashcards,
-          createdAt: new Date(data.created_at),
-          estimatedTime: data.estimated_time || Math.ceil(data.questions.length * 1.5)
-        };
-
-        setGeneratedQuiz(transformedQuiz);
-        setCurrentStep('review');
-        toast.success(`Loaded quiz: ${data.title}`);
-      }
-    } catch (error: any) {
-      console.error('Error loading specific quiz:', error);
-      toast.error('Failed to load the requested quiz');
-      // Fall back to normal quiz generator
-      setCurrentStep('upload');
-    } finally {
-      setLoadingSpecificQuiz(false);
-    }
-  };
 
   // Check for pre-filled content from Materials section
   useEffect(() => {
     const savedContent = localStorage.getItem('quiz_generator_content');
     const savedTitle = localStorage.getItem('quiz_generator_title');
     
-    if (savedContent && !textInput && uploadedFiles.length === 0 && !initialQuizId) {
+    if (savedContent && !textInput && uploadedFiles.length === 0) {
       setTextInput(savedContent);
       if (savedTitle) {
         toast.success(savedTitle);
@@ -147,7 +91,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({
       localStorage.removeItem('quiz_generator_content');
       localStorage.removeItem('quiz_generator_title');
     }
-  }, [textInput, uploadedFiles.length, setTextInput, initialQuizId]);
+  }, [textInput, uploadedFiles.length, setTextInput]);
 
   // Calculate total content length for minimum word validation
   const getTotalContentLength = () => {
@@ -415,24 +359,6 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({
       </div>
     </div>
   );
-
-  // Show loading state for specific quiz
-  if (loadingSpecificQuiz) {
-    return (
-      <div className="p-8 flex items-center justify-center h-96">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mb-6 mx-auto">
-            <Brain className="w-8 h-8 text-white animate-pulse" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Loading quiz...</h2>
-          <p className="text-gray-600 mb-6">Please wait while we fetch your quiz</p>
-          <div className="flex justify-center">
-            <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (currentStep === 'processing') {
     return (

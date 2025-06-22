@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { User, Bell, Shield, Palette, Globe, Download, Trash2, Key, Mail, Phone, Camera, Save, X, Check, AlertTriangle, Eye, EyeOff, Moon, Sun, Volume2, VolumeX, Smartphone, Monitor, Tablet, Settings, Lock, Unlock, RefreshCw, LogOut, CreditCard, FileText, HelpCircle, ExternalLink, ChevronRight, ToggleLeft as Toggle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, Bell, Shield, Palette, Globe, Download, Trash2, Key, Mail, Phone, Camera, Save, X, Check, AlertTriangle, Eye, EyeOff, Moon, Sun, Volume2, VolumeX, Smartphone, Monitor, Tablet, Settings, Lock, Unlock, RefreshCw, LogOut, CreditCard, FileText, HelpCircle, ExternalLink, ChevronRight, ToggleLeft as Toggle, Upload, Image } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
@@ -87,6 +87,11 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ onNavigate }) => {
   const [activeTab, setActiveTab] = useState('profile');
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [showImageUpload, setShowImageUpload] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [passwordData, setPasswordData] = useState({
     current: '',
     new: '',
@@ -183,6 +188,74 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ onNavigate }) => {
     }
   };
 
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+
+    setSelectedImage(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImagePreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+    
+    setShowImageUpload(true);
+  };
+
+  const uploadProfileImage = async () => {
+    if (!selectedImage || !user) return;
+
+    try {
+      setUploadingImage(true);
+
+      // Convert image to base64 for storage (in a real app, you'd upload to a storage service)
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string;
+        
+        // Update profile with new avatar URL
+        await updateProfile({ avatar_url: base64 });
+        
+        setShowImageUpload(false);
+        setSelectedImage(null);
+        setImagePreview(null);
+        toast.success('Profile picture updated successfully!');
+      };
+      reader.readAsDataURL(selectedImage);
+    } catch (error: any) {
+      console.error('Error uploading image:', error);
+      toast.error('Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeProfileImage = async () => {
+    try {
+      setSaving(true);
+      await updateProfile({ avatar_url: null });
+      toast.success('Profile picture removed');
+    } catch (error) {
+      toast.error('Failed to remove profile picture');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const changePassword = async () => {
     if (passwordData.new !== passwordData.confirm) {
       toast.error('New passwords do not match');
@@ -267,9 +340,32 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ onNavigate }) => {
               alt="Profile"
               className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
             />
-            <button className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors">
-              <Camera className="w-4 h-4" />
-            </button>
+            <div className="absolute bottom-0 right-0 flex space-x-1">
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors shadow-lg"
+                title="Upload new photo"
+              >
+                <Camera className="w-4 h-4" />
+              </button>
+              {profile?.avatar_url && (
+                <button 
+                  onClick={removeProfileImage}
+                  disabled={saving}
+                  className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors shadow-lg disabled:opacity-50"
+                  title="Remove photo"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="hidden"
+            />
           </div>
           <div>
             <h4 className="text-xl font-bold text-gray-900">{profile?.full_name}</h4>
@@ -277,6 +373,12 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ onNavigate }) => {
             <p className="text-sm text-gray-500 capitalize">
               {profile?.subscription_tier} Member
             </p>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Change profile picture
+            </button>
           </div>
         </div>
 
@@ -690,6 +792,86 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ onNavigate }) => {
     </div>
   );
 
+  // Image Upload Modal
+  const ImageUploadModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-md relative">
+        <button
+          onClick={() => {
+            setShowImageUpload(false);
+            setSelectedImage(null);
+            setImagePreview(null);
+          }}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Image className="w-8 h-8 text-blue-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Update Profile Picture</h2>
+          <p className="text-gray-600">Upload a new profile picture</p>
+        </div>
+
+        {imagePreview && (
+          <div className="mb-6">
+            <div className="flex justify-center">
+              <img
+                src={imagePreview}
+                alt="Preview"
+                className="w-32 h-32 rounded-full object-cover border-4 border-gray-200"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-medium text-blue-900 mb-2">Image Requirements</h4>
+            <ul className="text-sm text-blue-800 space-y-1">
+              <li>• Maximum file size: 5MB</li>
+              <li>• Supported formats: JPG, PNG, GIF</li>
+              <li>• Recommended: Square images (1:1 ratio)</li>
+              <li>• Minimum resolution: 200x200 pixels</li>
+            </ul>
+          </div>
+
+          <div className="flex space-x-4">
+            <button
+              onClick={() => {
+                setShowImageUpload(false);
+                setSelectedImage(null);
+                setImagePreview(null);
+              }}
+              className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={uploadProfileImage}
+              disabled={uploadingImage || !selectedImage}
+              className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              {uploadingImage ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Uploading...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  <span>Upload Image</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   // Password Change Modal
   const PasswordChangeModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -908,6 +1090,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ onNavigate }) => {
       </div>
 
       {/* Modals */}
+      {showImageUpload && <ImageUploadModal />}
       {showPasswordChange && <PasswordChangeModal />}
       {showDeleteConfirmation && <DeleteConfirmationModal />}
     </div>

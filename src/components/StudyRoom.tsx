@@ -43,7 +43,6 @@ interface StudyRoom {
   max_participants: number;
   is_public: boolean;
   created_by: string;
-  session_type: 'study' | 'quiz' | 'discussion' | 'presentation';
   tags: string[];
   room_code: string;
   status: 'active' | 'scheduled' | 'ended';
@@ -94,6 +93,29 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
 
+  // Available subjects for dropdown
+  const subjects = [
+    'Mathematics',
+    'Science',
+    'Biology',
+    'Chemistry',
+    'Physics',
+    'History',
+    'Literature',
+    'Computer Science',
+    'Engineering',
+    'Business',
+    'Psychology',
+    'Philosophy',
+    'Art',
+    'Music',
+    'Languages',
+    'Medicine',
+    'Law',
+    'Economics',
+    'Other'
+  ];
+
   // Create room form state
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -102,7 +124,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     difficulty: 'beginner' as const,
     max_participants: 10,
     is_public: true,
-    session_type: 'study' as const,
     tags: [] as string[],
     scheduled_for: ''
   });
@@ -171,7 +192,8 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         created_by: user.id,
         room_code: roomCode,
         status: createForm.scheduled_for ? 'scheduled' : 'active',
-        scheduled_for: createForm.scheduled_for || null // Convert empty string to null
+        scheduled_for: createForm.scheduled_for || null,
+        session_type: 'study' // Default session type since we removed the field
       };
 
       const { data: room, error } = await supabase
@@ -200,7 +222,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         difficulty: 'beginner',
         max_participants: 10,
         is_public: true,
-        session_type: 'study',
         tags: [],
         scheduled_for: ''
       });
@@ -392,16 +413,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     return matchesSearch && matchesSubject && matchesDifficulty;
   });
 
-  const getSessionTypeIcon = (type: string) => {
-    switch (type) {
-      case 'study': return <BookOpen className="w-4 h-4" />;
-      case 'quiz': return <Brain className="w-4 h-4" />;
-      case 'discussion': return <MessageCircle className="w-4 h-4" />;
-      case 'presentation': return <Presentation className="w-4 h-4" />;
-      default: return <BookOpen className="w-4 h-4" />;
-    }
-  };
-
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case 'beginner': return 'bg-green-100 text-green-800';
@@ -444,6 +455,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
               className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Enter room name..."
+              autoComplete="off"
             />
           </div>
 
@@ -456,6 +468,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
               className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 resize-none"
               placeholder="Describe what this room is about..."
+              autoComplete="off"
             />
           </div>
 
@@ -464,13 +477,16 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Subject *
               </label>
-              <input
-                type="text"
+              <select
                 value={createForm.subject}
                 onChange={(e) => setCreateForm(prev => ({ ...prev, subject: e.target.value }))}
                 className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., Mathematics, Biology..."
-              />
+              >
+                <option value="">Select a subject</option>
+                {subjects.map(subject => (
+                  <option key={subject} value={subject}>{subject}</option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -489,36 +505,18 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Session Type
-              </label>
-              <select
-                value={createForm.session_type}
-                onChange={(e) => setCreateForm(prev => ({ ...prev, session_type: e.target.value as any }))}
-                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="study">Study Session</option>
-                <option value="quiz">Quiz Practice</option>
-                <option value="discussion">Discussion</option>
-                <option value="presentation">Presentation</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Max Participants
-              </label>
-              <input
-                type="number"
-                min="2"
-                max="100"
-                value={createForm.max_participants}
-                onChange={(e) => setCreateForm(prev => ({ ...prev, max_participants: parseInt(e.target.value) }))}
-                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Max Participants
+            </label>
+            <input
+              type="number"
+              min="2"
+              max="100"
+              value={createForm.max_participants}
+              onChange={(e) => setCreateForm(prev => ({ ...prev, max_participants: parseInt(e.target.value) || 10 }))}
+              className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
 
           <div className="flex items-center space-x-3">
@@ -580,6 +578,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-mono"
               placeholder="Enter 6-digit code"
               maxLength={6}
+              autoComplete="off"
             />
           </div>
 
@@ -697,6 +696,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                   onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                   className="flex-1 p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Type a message..."
+                  autoComplete="off"
                 />
                 <button
                   onClick={sendMessage}
@@ -774,6 +774,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full lg:w-96"
+                autoComplete="off"
               />
             </div>
           </div>
@@ -784,11 +785,9 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="all">All Subjects</option>
-              <option value="Mathematics">Mathematics</option>
-              <option value="Science">Science</option>
-              <option value="History">History</option>
-              <option value="Literature">Literature</option>
-              <option value="Computer Science">Computer Science</option>
+              {subjects.map(subject => (
+                <option key={subject} value={subject}>{subject}</option>
+              ))}
             </select>
             <select
               value={selectedDifficulty}
@@ -831,7 +830,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white">
-                      {getSessionTypeIcon(room.session_type)}
+                      <BookOpen className="w-6 h-6" />
                     </div>
                     <div>
                       <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">

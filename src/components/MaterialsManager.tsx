@@ -70,6 +70,69 @@ interface MaterialsManagerProps {
   onNavigate?: (page: string) => void;
 }
 
+// Helper function to convert file to base64 (moved outside component)
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = error => reject(error);
+  });
+}
+
+// Helper function to upload file to Supabase Storage
+async function uploadFileToStorage(file: File, userId: string): Promise<string> {
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${userId}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+  
+  const { data, error } = await supabase.storage
+    .from('study-materials')
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+
+  if (error) {
+    console.error('Storage upload error:', error);
+    throw new Error(`Failed to upload file: ${error.message}`);
+  }
+
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from('study-materials')
+    .getPublicUrl(fileName);
+
+  return publicUrl;
+}
+
+// Helper function to delete file from Supabase Storage
+async function deleteFileFromStorage(fileUrl: string): Promise<void> {
+  try {
+    // Extract file path from URL
+    const url = new URL(fileUrl);
+    const pathParts = url.pathname.split('/');
+    const fileName = pathParts[pathParts.length - 1];
+    const folderPath = pathParts[pathParts.length - 2];
+    const filePath = `${folderPath}/${fileName}`;
+
+    const { error } = await supabase.storage
+      .from('study-materials')
+      .remove([filePath]);
+
+    if (error) {
+      console.error('Storage delete error:', error);
+      // Don't throw error for storage deletion failures
+    }
+  } catch (error) {
+    console.error('Error parsing file URL for deletion:', error);
+    // Don't throw error for URL parsing failures
+  }
+}
+
 const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [materials, setMaterials] = useState<StudyMaterial[]>([]);
@@ -87,8 +150,8 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
   const [editingMaterial, setEditingMaterial] = useState<StudyMaterial | null>(null);
   const [sharingMaterial, setSharingMaterial] = useState<StudyMaterial | null>(null);
   const [viewingMaterial, setViewingMaterial] = useState<StudyMaterial | null>(null);
-  const [uploadingFiles, setUploadingFiles] = useState<File[]>([]);
-  const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set());
+  const [filesToUpload, setFilesToUpload] = useState<File[]>([]);
+  const [processingFileIds, setProcessingFileIds] = useState<Set<string>>(new Set());
 
   // Load materials on component mount
   useEffect(() => {
@@ -102,24 +165,18 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
 
     try {
       setLoading(true);
-      console.log('Loading materials for user:', user.id);
-      
       const { data, error } = await supabase
         .from('study_materials')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error loading materials:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('Loaded materials:', data?.length || 0);
       setMaterials(data || []);
     } catch (error: any) {
       console.error('Error loading materials:', error);
-      toast.error('Failed to load materials: ' + (error.message || 'Unknown error'));
+      toast.error('Failed to load materials');
     } finally {
       setLoading(false);
     }
@@ -127,11 +184,8 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
 
   // File upload handling
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    console.log('Files dropped:', acceptedFiles.length);
-    if (acceptedFiles.length > 0) {
-      setUploadingFiles(acceptedFiles);
-      setShowUploadModal(true);
-    }
+    setFilesToUpload(acceptedFiles);
+    setShowUploadModal(true);
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -141,99 +195,98 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
       'text/*': ['.txt', '.md'],
       'application/pdf': ['.pdf']
     },
-    maxSize: 10 * 1024 * 1024, // 10MB
-    multiple: true
+    maxSize: 10 * 1024 * 1024 // 10MB
   });
 
-  const handleAddMaterialsClick = () => {
-    console.log('Add Materials button clicked');
-    setUploadingFiles([]);
-    setShowUploadModal(true);
-  };
-
   const processAndUploadFiles = async (files: File[], titles: string[]) => {
-    if (!user) {
-      toast.error('You must be logged in to upload materials');
-      return;
-    }
-
-    console.log('Processing and uploading files:', files.length);
+    if (!user) return;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const title = titles[i] || file.name;
       const fileId = Math.random().toString(36).substr(2, 9);
 
-      setProcessingFiles(prev => new Set([...prev, fileId]));
+      // Add processing file ID to track progress
+      setProcessingFileIds(prev => new Set([...prev, fileId]));
+
+      // Add pending material to UI immediately for visual feedback
+      const pendingMaterial: StudyMaterial = {
+        id: fileId,
+        user_id: user.id,
+        title,
+        content: '',
+        file_type: file.type.startsWith('image/') ? 'image' : 
+                  isPDFFile(file) ? 'pdf' : 'text',
+        file_size: file.size,
+        processing_status: 'processing',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_favorite: false
+      };
+
+      setMaterials(prev => [pendingMaterial, ...prev]);
 
       try {
-        console.log('Processing file:', file.name, 'Type:', file.type);
-        
         let extractedText = '';
         let fileUrl = '';
+        let content = '';
 
         // Process file based on type
         if (isPDFFile(file)) {
-          console.log('Processing PDF file');
+          // For PDFs: extract text and upload file to storage
           extractedText = await extractTextFromPDF(file);
+          content = extractedText;
+          fileUrl = await uploadFileToStorage(file, user.id);
         } else if (file.type.startsWith('image/')) {
-          console.log('Processing image file');
+          // For images: extract text with AI and upload file to storage
           const base64 = await fileToBase64(file);
-          
-          // Check if OpenAI API key is available for text extraction
-          if (import.meta.env.VITE_OPENAI_API_KEY) {
-            try {
-              extractedText = await extractTextFromImage(base64);
-            } catch (error) {
-              console.warn('Failed to extract text from image:', error);
-              extractedText = `Image file: ${file.name}`;
-            }
-          } else {
-            extractedText = `Image file: ${file.name} (Text extraction requires OpenAI API key)`;
-          }
-          
-          fileUrl = base64; // Store base64 for images
+          extractedText = await extractTextFromImage(base64);
+          content = extractedText;
+          fileUrl = await uploadFileToStorage(file, user.id);
         } else {
-          console.log('Processing text file');
+          // For text files: read content directly, no storage upload needed
           extractedText = await file.text();
+          content = extractedText;
+          fileUrl = ''; // No file URL for text files
         }
 
-        console.log('Extracted text length:', extractedText.length);
-
         // Save to database
-        const materialData = {
-          user_id: user.id,
-          title,
-          content: extractedText,
-          file_type: file.type.startsWith('image/') ? 'image' : 
-                    isPDFFile(file) ? 'pdf' : 'text',
-          file_url: fileUrl || null,
-          file_size: file.size,
-          extracted_text: extractedText,
-          processing_status: 'completed',
-          is_favorite: false
-        };
-
-        console.log('Saving material to database:', materialData);
-
         const { data, error } = await supabase
           .from('study_materials')
-          .insert(materialData)
+          .insert({
+            user_id: user.id,
+            title,
+            content,
+            file_type: file.type.startsWith('image/') ? 'image' : 
+                      isPDFFile(file) ? 'pdf' : 'text',
+            file_url: fileUrl || null,
+            file_size: file.size,
+            extracted_text: extractedText,
+            processing_status: 'completed',
+            is_favorite: false
+          })
           .select()
           .single();
 
-        if (error) {
-          console.error('Database error:', error);
-          throw error;
-        }
+        if (error) throw error;
 
-        console.log('Material saved successfully:', data);
+        // Update the pending material with the real data
+        setMaterials(prev => prev.map(m => 
+          m.id === fileId ? data : m
+        ));
+
         toast.success(`${title} uploaded successfully`);
       } catch (error: any) {
         console.error('Error processing file:', error);
-        toast.error(`Failed to process ${title}: ${error.message || 'Unknown error'}`);
+        
+        // Update the pending material to show error state
+        setMaterials(prev => prev.map(m => 
+          m.id === fileId ? { ...m, processing_status: 'error' as const } : m
+        ));
+        
+        toast.error(`Failed to process ${title}: ${error.message}`);
       } finally {
-        setProcessingFiles(prev => {
+        setProcessingFileIds(prev => {
           const newSet = new Set(prev);
           newSet.delete(fileId);
           return newSet;
@@ -241,10 +294,9 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
       }
     }
 
-    // Reload materials
-    await loadMaterials();
+    // Close modal and reset state
     setShowUploadModal(false);
-    setUploadingFiles([]);
+    setFilesToUpload([]);
   };
 
   const deleteMaterial = async (materialId: string) => {
@@ -253,6 +305,9 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
     }
 
     try {
+      const material = materials.find(m => m.id === materialId);
+      
+      // Delete from database first
       const { error } = await supabase
         .from('study_materials')
         .delete()
@@ -260,6 +315,11 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
         .eq('user_id', user?.id);
 
       if (error) throw error;
+
+      // Delete file from storage if it exists
+      if (material?.file_url) {
+        await deleteFileFromStorage(material.file_url);
+      }
 
       setMaterials(prev => prev.filter(m => m.id !== materialId));
       toast.success('Material deleted successfully');
@@ -325,37 +385,37 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
     try {
       toast.loading('Preparing download...');
       
-      let content = '';
-      let filename = '';
-      let mimeType = 'text/plain';
-
-      if (material.file_type === 'image' && material.file_url) {
-        // For images, download the base64 data
-        const base64Data = material.file_url;
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
+      if (material.file_url) {
+        // Download from Supabase Storage URL
+        const response = await fetch(material.file_url);
+        if (!response.ok) {
+          throw new Error('Failed to fetch file');
         }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'image/jpeg' });
         
+        const blob = await response.blob();
         const link = document.createElement('a');
         link.href = window.URL.createObjectURL(blob);
-        link.download = `${material.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.jpg`;
+        
+        // Determine file extension based on file type
+        let extension = 'txt';
+        if (material.file_type === 'image') {
+          extension = 'jpg';
+        } else if (material.file_type === 'pdf') {
+          extension = 'pdf';
+        }
+        
+        link.download = `${material.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.${extension}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(link.href);
       } else {
-        // For text and PDF (extracted text), download as text file
-        content = material.content || material.extracted_text || '';
-        filename = `${material.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
-        
-        const blob = new Blob([content], { type: mimeType });
+        // Download extracted text as text file
+        const content = material.content || material.extracted_text || '';
+        const blob = new Blob([content], { type: 'text/plain' });
         const link = document.createElement('a');
         link.href = window.URL.createObjectURL(blob);
-        link.download = filename;
+        link.download = `${material.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -434,20 +494,6 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
       return sortOrder === 'asc' ? comparison : -comparison;
     });
 
-  // Helper function to convert file to base64
-  function fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const result = reader.result as string;
-        const base64 = result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = error => reject(error);
-    });
-  }
-
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return 'Unknown size';
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -483,7 +529,7 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
         <button
           onClick={() => {
             setShowUploadModal(false);
-            setUploadingFiles([]);
+            setFilesToUpload([]);
           }}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
         >
@@ -500,95 +546,59 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
           </p>
         </div>
 
-        {uploadingFiles.length === 0 ? (
-          <div
-            {...getRootProps()}
-            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 ${
-              isDragActive 
-                ? 'border-blue-400 bg-blue-50' 
-                : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
-            }`}
-          >
-            <input {...getInputProps()} />
-            <div className="space-y-4">
-              <div className="flex justify-center space-x-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <Image className="w-6 h-6 text-blue-600" />
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                  <FileText className="w-6 h-6 text-green-600" />
+        <div className="space-y-4 mb-8">
+          {filesToUpload.map((file, index) => (
+            <div key={index} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center space-x-3 mb-3">
+                {getFileIcon(file.type.startsWith('image/') ? 'image' : 
+                           isPDFFile(file) ? 'pdf' : 'text')}
+                <div className="flex-1">
+                  <p className="font-medium text-gray-900">{file.name}</p>
+                  <p className="text-sm text-gray-500">{formatFileSize(file.size)}</p>
                 </div>
               </div>
-              <div>
-                <p className="text-lg font-medium text-gray-900 mb-2">
-                  {isDragActive ? 'Drop files here' : 'Drag & drop your files'}
-                </p>
-                <p className="text-gray-500 mb-4">
-                  Support for images, PDFs, and text files (max 10MB each)
-                </p>
-                <button className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors font-medium">
-                  Browse Files
-                </button>
-              </div>
+              <input
+                type="text"
+                placeholder="Enter a title for this material..."
+                defaultValue={file.name.replace(/\.[^/.]+$/, "")}
+                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                id={`title-${index}`}
+              />
             </div>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-4 mb-8">
-              {uploadingFiles.map((file, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center space-x-3 mb-3">
-                    {getFileIcon(file.type.startsWith('image/') ? 'image' : 
-                               isPDFFile(file) ? 'pdf' : 'text')}
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900">{file.name}</p>
-                      <p className="text-sm text-gray-500">{formatFileSize(file.size)}</p>
-                    </div>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Enter a title for this material..."
-                    defaultValue={file.name.replace(/\.[^/.]+$/, "")}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    id={`title-${index}`}
-                  />
-                </div>
-              ))}
-            </div>
+          ))}
+        </div>
 
-            <div className="flex space-x-4">
-              <button
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setUploadingFiles([]);
-                }}
-                className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  const titles = uploadingFiles.map((_, index) => {
-                    const input = document.getElementById(`title-${index}`) as HTMLInputElement;
-                    return input?.value || uploadingFiles[index].name;
-                  });
-                  processAndUploadFiles(uploadingFiles, titles);
-                }}
-                disabled={processingFiles.size > 0}
-                className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-              >
-                {processingFiles.size > 0 ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Processing...</span>
-                  </>
-                ) : (
-                  <span>Upload Materials</span>
-                )}
-              </button>
-            </div>
-          </>
-        )}
+        <div className="flex space-x-4">
+          <button
+            onClick={() => {
+              setShowUploadModal(false);
+              setFilesToUpload([]);
+            }}
+            className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              const titles = filesToUpload.map((_, index) => {
+                const input = document.getElementById(`title-${index}`) as HTMLInputElement;
+                return input?.value || filesToUpload[index].name;
+              });
+              processAndUploadFiles(filesToUpload, titles);
+            }}
+            disabled={processingFileIds.size > 0}
+            className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+          >
+            {processingFileIds.size > 0 ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              <span>Upload Materials</span>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -832,7 +842,7 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
               <div className="h-full flex flex-col">
                 <div className="flex-1 flex items-center justify-center bg-gray-50 p-6">
                   <img
-                    src={`data:image/jpeg;base64,${viewingMaterial.file_url}`}
+                    src={viewingMaterial.file_url}
                     alt={viewingMaterial.title}
                     className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
                   />
@@ -909,7 +919,7 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
           </div>
           <div className="flex items-center space-x-4">
             <button
-              onClick={handleAddMaterialsClick}
+              onClick={() => setShowUploadModal(true)}
               className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
             >
               <Plus className="w-4 h-4" />
@@ -994,7 +1004,8 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
           <div className="text-center py-16">
             {materials.length === 0 ? (
               // No materials at all
-              <div>
+              <div {...getRootProps()} className="cursor-pointer">
+                <input {...getInputProps()} />
                 <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Upload className="w-12 h-12 text-blue-600" />
                 </div>
@@ -1002,10 +1013,7 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                 <p className="text-gray-600 mb-6 max-w-md mx-auto">
                   Upload your first study material to get started. You can upload images, PDFs, and text files.
                 </p>
-                <button 
-                  onClick={handleAddMaterialsClick}
-                  className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium"
-                >
+                <button className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium">
                   Upload Your First Material
                 </button>
               </div>
@@ -1132,12 +1140,26 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                       {material.content || material.extracted_text || 'No content preview available'}
                     </p>
 
-                    <div className="flex items-center justify-between text-xs text-gray-500">
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
                       <span>{formatFileSize(material.file_size)}</span>
                       <span>{formatDate(material.created_at)}</span>
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-gray-100 flex space-x-2">
+                    {material.processing_status === 'processing' && (
+                      <div className="flex items-center space-x-2 text-blue-600 mb-4">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Processing...</span>
+                      </div>
+                    )}
+
+                    {material.processing_status === 'error' && (
+                      <div className="flex items-center space-x-2 text-red-600 mb-4">
+                        <XCircle className="w-4 h-4" />
+                        <span className="text-sm">Processing failed</span>
+                      </div>
+                    )}
+
+                    <div className="flex space-x-2">
                       <button
                         onClick={() => viewMaterial(material)}
                         className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium flex items-center justify-center space-x-2"
@@ -1182,6 +1204,12 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                       </div>
                       {material.is_favorite && (
                         <Star className="w-4 h-4 text-yellow-500 fill-current flex-shrink-0" />
+                      )}
+                      {material.processing_status === 'processing' && (
+                        <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" />
+                      )}
+                      {material.processing_status === 'error' && (
+                        <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
                       )}
                     </div>
                     <div className="col-span-2 flex items-center">

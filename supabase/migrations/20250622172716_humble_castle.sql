@@ -1,0 +1,107 @@
+/*
+  # Fix Room Policies and Helper Function
+
+  1. Security
+    - Drop existing problematic policies that depend on the function
+    - Drop and recreate the helper function with proper parameters
+    - Create new simplified policies using the helper function
+    - Grant necessary permissions
+
+  2. Changes
+    - Fix room_messages policies to use helper function
+    - Fix room_participants policies for better access control
+    - Fix room_shared_content policies
+    - Ensure all policies work correctly with the helper function
+*/
+
+-- Drop all policies that depend on the function first
+DROP POLICY IF EXISTS "Participants can read messages" ON room_messages;
+DROP POLICY IF EXISTS "Participants can send messages" ON room_messages;
+DROP POLICY IF EXISTS "Users can read messages from rooms they're in" ON room_messages;
+DROP POLICY IF EXISTS "Users can send messages to rooms they're in" ON room_messages;
+DROP POLICY IF EXISTS "Participants can view other participants in the same room" ON room_participants;
+DROP POLICY IF EXISTS "Users can read room participants for rooms they're in" ON room_participants;
+DROP POLICY IF EXISTS "Users can read room participants" ON room_participants;
+DROP POLICY IF EXISTS "Users can read shared content from rooms they're in" ON room_shared_content;
+DROP POLICY IF EXISTS "Users can share content to rooms they're in" ON room_shared_content;
+
+-- Now we can safely drop the function
+DROP FUNCTION IF EXISTS is_room_participant(uuid, uuid);
+
+-- Create helper function to check if user is room participant
+CREATE OR REPLACE FUNCTION is_room_participant(room_uuid uuid, user_uuid uuid)
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM room_participants 
+    WHERE room_id = room_uuid 
+    AND user_id = user_uuid 
+    AND is_active = true
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Create new policies for room_messages using the helper function
+CREATE POLICY "Participants can read messages"
+  ON room_messages
+  FOR SELECT
+  TO authenticated
+  USING (is_room_participant(room_id, auth.uid()));
+
+CREATE POLICY "Participants can send messages"
+  ON room_messages
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (is_room_participant(room_id, auth.uid()));
+
+-- Create simplified policy for reading room participants
+CREATE POLICY "Participants can view other participants in the same room"
+  ON room_participants
+  FOR SELECT
+  TO authenticated
+  USING (is_room_participant(room_id, auth.uid()));
+
+-- Update room_participants INSERT policy to handle duplicates better
+DROP POLICY IF EXISTS "Users can join rooms" ON room_participants;
+CREATE POLICY "Users can join rooms"
+  ON room_participants
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (user_id = auth.uid());
+
+-- Update room_participants UPDATE policy
+DROP POLICY IF EXISTS "Users can update their own participation" ON room_participants;
+DROP POLICY IF EXISTS "Users can update their own participation" ON room_participants;
+CREATE POLICY "Users can update their own participation"
+  ON room_participants
+  FOR UPDATE
+  TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+-- Update room_participants DELETE policy
+DROP POLICY IF EXISTS "Users can leave rooms" ON room_participants;
+CREATE POLICY "Users can leave rooms"
+  ON room_participants
+  FOR DELETE
+  TO authenticated
+  USING (user_id = auth.uid());
+
+-- Create policies for room_shared_content using helper function
+CREATE POLICY "Users can read shared content from rooms they're in"
+  ON room_shared_content
+  FOR SELECT
+  TO authenticated
+  USING (is_room_participant(room_id, auth.uid()));
+
+CREATE POLICY "Users can share content to rooms they're in"
+  ON room_shared_content
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    user_id = auth.uid() AND
+    is_room_participant(room_id, auth.uid())
+  );
+
+-- Grant necessary permissions
+GRANT EXECUTE ON FUNCTION is_room_participant(uuid, uuid) TO authenticated;

@@ -4,12 +4,6 @@ import {
   MessageSquare, 
   Share2, 
   Settings, 
-  Mic, 
-  MicOff, 
-  Video, 
-  VideoOff,
-  Phone,
-  PhoneOff,
   Send,
   Paperclip,
   MoreVertical,
@@ -129,16 +123,9 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [userMaterials, setUserMaterials] = useState<StudyMaterial[]>([]);
   const [selectedResourceId, setSelectedResourceId] = useState('');
   
-  // Whiteboard state
+  // Whiteboard state - simple version
   const [isDrawing, setIsDrawing] = useState(false);
-  const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'text' | 'shape'>('pen');
   const [currentColor, setCurrentColor] = useState('#000000');
-  const [currentShape, setCurrentShape] = useState<'rectangle' | 'circle' | 'triangle' | 'line'>('rectangle');
-  
-  // Video call state
-  const [isVideoOn, setIsVideoOn] = useState(false);
-  const [isAudioOn, setIsAudioOn] = useState(false);
-  const [isInCall, setIsInCall] = useState(false);
   
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -206,9 +193,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       };
     }
   }, [selectedRoom, user]);
-
-  // Remove auto-scroll effect - this was causing the scrolling issue
-  // The messages will naturally scroll when new ones are added
 
   const loadRooms = async () => {
     try {
@@ -418,7 +402,18 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!selectedResourceId || !selectedRoom || !user) return;
 
     try {
-      const { error } = await supabase
+      // Get the resource details
+      const resource = shareResourceType === 'quiz' 
+        ? userQuizzes.find(q => q.id === selectedResourceId)
+        : userMaterials.find(m => m.id === selectedResourceId);
+
+      if (!resource) {
+        toast.error('Resource not found');
+        return;
+      }
+
+      // Insert shared content record
+      const { error: contentError } = await supabase
         .from('room_shared_content')
         .insert({
           room_id: selectedRoom.id,
@@ -427,19 +422,15 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           content_id: selectedResourceId
         });
 
-      if (error) throw error;
+      if (contentError) throw contentError;
 
-      // Send a message about the shared resource
-      const resourceTitle = shareResourceType === 'quiz' 
-        ? userQuizzes.find(q => q.id === selectedResourceId)?.title
-        : userMaterials.find(m => m.id === selectedResourceId)?.title;
-
+      // Send a message with the shared resource link
       const { error: messageError } = await supabase
         .from('room_messages')
         .insert({
           room_id: selectedRoom.id,
           user_id: user.id,
-          message: `📎 Shared ${shareResourceType}: ${resourceTitle}`,
+          message: `${resource.title}|${selectedResourceId}`, // Store title and ID for link generation
           message_type: shareResourceType === 'quiz' ? 'quiz_share' : 'file'
         });
 
@@ -457,12 +448,12 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const handleResourceClick = async (messageType: string, message: string) => {
     if (!onNavigate) return;
 
-    // Extract resource title from message
-    const resourceTitle = message.replace(/📎 Shared (quiz|study_material): /, '');
+    // Parse the message to get title and ID
+    const [resourceTitle, resourceId] = message.split('|');
     
     if (messageType === 'quiz_share') {
-      // Find the quiz by title and navigate to quiz generator with the quiz data
-      const quiz = userQuizzes.find(q => q.title === resourceTitle);
+      // Find the quiz by ID and navigate to quiz generator with the quiz data
+      const quiz = userQuizzes.find(q => q.id === resourceId);
       if (quiz) {
         // Store quiz data for the quiz generator
         localStorage.setItem('shared_quiz_data', JSON.stringify(quiz));
@@ -473,8 +464,8 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         toast.error('Quiz not found');
       }
     } else if (messageType === 'file') {
-      // Find the material by title and navigate to materials with the material highlighted
-      const material = userMaterials.find(m => m.title === resourceTitle);
+      // Find the material by ID and navigate to materials with the material highlighted
+      const material = userMaterials.find(m => m.id === resourceId);
       if (material) {
         // Store material data for the materials manager
         localStorage.setItem('shared_material_data', JSON.stringify(material));
@@ -501,7 +492,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     }
   };
 
-  // Whiteboard functions
+  // Simple whiteboard functions
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     setIsDrawing(true);
     const canvas = canvasRef.current;
@@ -533,7 +524,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     
     ctx.lineTo(x, y);
     ctx.strokeStyle = currentColor;
-    ctx.lineWidth = currentTool === 'eraser' ? 10 : 2;
+    ctx.lineWidth = 2;
     ctx.stroke();
   };
 
@@ -798,38 +789,10 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        {/* Whiteboard Tools */}
+        {/* Simple Whiteboard Tools */}
         <div className="border-b border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              {/* Drawing Tools */}
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setCurrentTool('pen')}
-                  className={`p-2 rounded-lg transition-colors ${
-                    currentTool === 'pen' ? 'bg-purple-100 text-purple-600' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <Type className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setCurrentTool('eraser')}
-                  className={`p-2 rounded-lg transition-colors ${
-                    currentTool === 'eraser' ? 'bg-purple-100 text-purple-600' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setCurrentTool('shape')}
-                  className={`p-2 rounded-lg transition-colors ${
-                    currentTool === 'shape' ? 'bg-purple-100 text-purple-600' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <Square className="w-4 h-4" />
-                </button>
-              </div>
-
               {/* Color Picker */}
               <div className="flex items-center space-x-2">
                 <input
@@ -838,7 +801,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                   onChange={(e) => setCurrentColor(e.target.value)}
                   className="w-8 h-8 rounded border border-gray-200 cursor-pointer"
                 />
-                <Palette className="w-4 h-4 text-gray-400" />
+                <span className="text-sm text-gray-600">Color</span>
               </div>
             </div>
 
@@ -859,44 +822,12 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             ref={canvasRef}
             width={800}
             height={600}
-            className="w-full h-full border border-gray-200 rounded-lg cursor-crosshair"
+            className="w-full h-full border border-gray-200 rounded-lg cursor-crosshair bg-white"
             onMouseDown={startDrawing}
             onMouseMove={draw}
             onMouseUp={stopDrawing}
             onMouseLeave={stopDrawing}
           />
-        </div>
-
-        {/* Video Call Controls */}
-        <div className="border-t border-gray-200 p-4">
-          <div className="flex items-center justify-center space-x-4">
-            <button
-              onClick={() => setIsAudioOn(!isAudioOn)}
-              className={`p-3 rounded-full transition-colors ${
-                isAudioOn ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-              }`}
-            >
-              {isAudioOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-            </button>
-            
-            <button
-              onClick={() => setIsVideoOn(!isVideoOn)}
-              className={`p-3 rounded-full transition-colors ${
-                isVideoOn ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-              }`}
-            >
-              {isVideoOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
-            </button>
-            
-            <button
-              onClick={() => setIsInCall(!isInCall)}
-              className={`p-3 rounded-full transition-colors ${
-                isInCall ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-              }`}
-            >
-              {isInCall ? <PhoneOff className="w-5 h-5" /> : <Phone className="w-5 h-5" />}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -956,7 +887,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                   </div>
                   
                   {/* Check if message is a shared resource */}
-                  {(message.message_type === 'quiz_share' || message.message_type === 'file') && message.message.includes('📎 Shared') ? (
+                  {(message.message_type === 'quiz_share' || message.message_type === 'file') ? (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
@@ -966,7 +897,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                             <FileText className="w-4 h-4 text-blue-600" />
                           )}
                           <span className="text-sm font-medium text-blue-900">
-                            {message.message.replace('📎 Shared quiz: ', '').replace('📎 Shared study_material: ', '')}
+                            {message.message.split('|')[0]} {/* Show only the title part */}
                           </span>
                         </div>
                         <button

@@ -560,11 +560,11 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
   // Resource sharing functions
   const shareQuiz = () => {
-    toast.info('Quiz sharing feature coming soon!');
+    toast('Quiz sharing feature coming soon!');
   };
 
   const shareMaterial = () => {
-    toast.info('Material sharing feature coming soon!');
+    toast('Material sharing feature coming soon!');
   };
 
   // Auto-scroll chat to bottom when new messages arrive

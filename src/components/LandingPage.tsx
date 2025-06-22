@@ -128,7 +128,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onAuthAction }) => {
             </div>
 
             {/* Right Content - Study Groups */}
-            <div className="relative">
+            <div className="relative lg:pl-8">
               {/* Main Study Group Card */}
               <div className="bg-gray-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-gray-700 to-gray-900"></div>
@@ -154,28 +154,36 @@ const LandingPage: React.FC<LandingPageProps> = ({ onAuthAction }) => {
                 </div>
               </div>
 
-              {/* Floating Study Group Cards */}
-              <div className="absolute -bottom-6 -right-6 space-y-4">
+              {/* Floating Study Group Cards - Fixed positioning */}
+              <div className="absolute -bottom-8 -right-4 space-y-3 z-20">
                 {studyGroups.map((group, index) => (
-                  <div key={index} className={`${group.color} rounded-2xl p-4 shadow-lg transform rotate-3 hover:rotate-0 transition-transform duration-300`}>
+                  <div 
+                    key={index} 
+                    className={`${group.color} rounded-2xl p-4 shadow-xl transform transition-all duration-300 hover:scale-105 hover:rotate-0 ${
+                      index === 0 ? 'rotate-2' : index === 1 ? '-rotate-1' : 'rotate-1'
+                    } w-72`}
+                    style={{
+                      transform: `translateY(${index * -8}px) rotate(${index === 0 ? '2deg' : index === 1 ? '-1deg' : '1deg'})`
+                    }}
+                  >
                     <div className="flex items-center space-x-3">
-                      <div className="flex -space-x-2">
+                      <div className="flex -space-x-2 flex-shrink-0">
                         <img src={group.image} alt="Student" className="w-8 h-8 rounded-full border-2 border-white" />
                         <img src={group.image} alt="Student" className="w-8 h-8 rounded-full border-2 border-white" />
                         <img src={group.image} alt="Student" className="w-8 h-8 rounded-full border-2 border-white" />
                       </div>
-                      <div>
-                        <h4 className="font-bold text-white text-sm">{group.name}</h4>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-white text-sm truncate">{group.name}</h4>
                         <p className="text-white/80 text-xs">Number of students: {group.students}</p>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-white" />
+                      <ArrowRight className="w-4 h-4 text-white flex-shrink-0" />
                     </div>
                   </div>
                 ))}
               </div>
 
               {/* Decorative Elements */}
-              <div className="absolute -top-4 -left-4 w-16 h-16 bg-green-400 rounded-full flex items-center justify-center shadow-lg">
+              <div className="absolute -top-4 -left-4 w-16 h-16 bg-green-400 rounded-full flex items-center justify-center shadow-lg z-10">
                 <Zap className="w-8 h-8 text-white" />
               </div>
             </div>

@@ -32,21 +32,43 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     params: {
       eventsPerSecond: 10
     }
+  },
+  global: {
+    fetch: (url, options = {}) => {
+      return fetch(url, {
+        ...options,
+        // Add timeout to prevent hanging requests
+        signal: AbortSignal.timeout(10000)
+      }).catch(error => {
+        console.error('Supabase fetch error:', error);
+        throw error;
+      });
+    }
   }
 });
 
-// Test connection on initialization
-supabase.from('profiles').select('count', { count: 'exact', head: true })
-  .then(({ error }) => {
+// Test connection with proper error handling
+let connectionTested = false;
+
+export const testSupabaseConnection = async () => {
+  if (connectionTested) return;
+  
+  try {
+    const { error } = await supabase.from('profiles').select('count', { count: 'exact', head: true });
     if (error) {
       console.error('Supabase connection test failed:', error);
     } else {
       console.log('Supabase connection successful');
     }
-  })
-  .catch((error) => {
+  } catch (error) {
     console.error('Supabase connection error:', error);
-  });
+  } finally {
+    connectionTested = true;
+  }
+};
+
+// Don't test connection immediately - let components handle it
+// testSupabaseConnection();
 
 // Database types
 export interface User {

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   Menu, 
-  X
+  X,
+  Zap
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -19,12 +20,8 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, onAu
         <div className="flex justify-between items-center h-20">
           {/* Logo */}
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg overflow-hidden">
-              <img 
-                src="/study.png" 
-                alt="StudySnap" 
-                className="w-full h-full object-contain"
-              />
+            <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
+              <Zap className="w-6 h-6 text-white" />
             </div>
             <span className="text-2xl font-bold text-gray-900">
               StudySnap

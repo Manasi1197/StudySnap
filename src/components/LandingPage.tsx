@@ -11,7 +11,8 @@ import {
   Target,
   TrendingUp,
   Sparkles,
-  BookOpen
+  BookOpen,
+  Zap
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -176,12 +177,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onAuthAction }) => {
               </div>
 
               {/* Decorative Elements */}
-              <div className="absolute -top-4 -left-4 w-16 h-16 rounded-full flex items-center justify-center shadow-lg z-10 animate-spin-slow overflow-hidden">
-                <img 
-                  src="/study.png" 
-                  alt="StudySnap" 
-                  className="w-full h-full object-contain"
-                />
+              <div className="absolute -top-4 -left-4 w-16 h-16 bg-green-400 rounded-full flex items-center justify-center shadow-lg z-10 animate-spin-slow">
+                <Zap className="w-8 h-8 text-white" />
               </div>
             </div>
           </div>

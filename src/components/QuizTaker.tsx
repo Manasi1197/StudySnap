@@ -171,7 +171,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
   // Exit Confirmation Modal
   const ExitConfirmationModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-8 w-full max-w-md relative">
+      <div className="bg-white rounded-2xl p-6 sm:p-8 w-full max-w-md relative">
         <button
           onClick={cancelExit}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
@@ -179,26 +179,26 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
           <X className="w-6 h-6" />
         </button>
 
-        <div className="text-center mb-8">
+        <div className="text-center mb-6 sm:mb-8">
           <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-8 h-8 text-orange-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Leave Quiz?</h2>
-          <p className="text-gray-600">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Leave Quiz?</h2>
+          <p className="text-gray-600 text-sm sm:text-base">
             You have unsaved progress. If you leave now, your answers will be lost. Are you sure you want to continue?
           </p>
         </div>
 
-        <div className="flex space-x-4">
+        <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
           <button
             onClick={cancelExit}
-            className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+            className="px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm sm:text-base"
           >
             Stay & Continue
           </button>
           <button
             onClick={confirmExit}
-            className="flex-1 px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
+            className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium text-sm sm:text-base"
           >
             Leave Quiz
           </button>
@@ -214,44 +214,44 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
     return (
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-8 py-6">
+        <div className="bg-white border-b border-gray-200 px-4 sm:px-8 py-4 sm:py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
                 onClick={onBack}
-                className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+                className="flex items-center space-x-2 px-3 sm:px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span>Back to Quiz Overview</span>
+                <span className="hidden sm:inline">Back to Quiz Overview</span>
               </button>
-              <div className="h-6 w-px bg-gray-300"></div>
+              <div className="h-6 w-px bg-gray-300 hidden sm:block"></div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Quiz Results</h1>
-                <p className="text-gray-600">{quiz.title}</p>
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900">Quiz Results</h1>
+                <p className="text-gray-600 text-sm">{quiz.title}</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Results Content */}
-        <div className="max-w-4xl mx-auto px-8 py-12">
+        <div className="max-w-4xl mx-auto px-4 sm:px-8 py-8 sm:py-12">
           {/* Score Card */}
-          <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-lg mb-8">
+          <div className="bg-white rounded-2xl p-6 sm:p-8 border border-gray-200 shadow-lg mb-8">
             <div className="text-center">
-              <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 ${
+              <div className={`w-20 sm:w-24 h-20 sm:h-24 rounded-full flex items-center justify-center mx-auto mb-6 ${
                 percentage >= 80 ? 'bg-green-100' : percentage >= 60 ? 'bg-yellow-100' : 'bg-red-100'
               }`}>
-                <Trophy className={`w-12 h-12 ${
+                <Trophy className={`w-10 sm:w-12 h-10 sm:h-12 ${
                   percentage >= 80 ? 'text-green-600' : percentage >= 60 ? 'text-yellow-600' : 'text-red-600'
                 }`} />
               </div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
                 {percentage >= 80 ? 'Excellent!' : percentage >= 60 ? 'Good Job!' : 'Keep Practicing!'}
               </h2>
-              <p className="text-xl text-gray-600 mb-6">
+              <p className="text-lg sm:text-xl text-gray-600 mb-6">
                 You scored {score} out of {totalQuestions} questions correctly
               </p>
-              <div className="text-6xl font-bold text-gray-900 mb-4">
+              <div className="text-4xl sm:text-6xl font-bold text-gray-900 mb-4">
                 {percentage}%
               </div>
               <div className="flex justify-center space-x-8 text-sm text-gray-500">
@@ -266,17 +266,17 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-center space-x-4 mb-8">
+          <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4 mb-8">
             <button
               onClick={restartQuiz}
-              className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              className="flex items-center justify-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm sm:text-base"
             >
               <RotateCcw className="w-4 h-4" />
               <span>Retake Quiz</span>
             </button>
             <button
               onClick={onBack}
-              className="flex items-center space-x-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="flex items-center justify-center space-x-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm sm:text-base"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back to Overview</span>
@@ -285,16 +285,16 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
 
           {/* Question Review */}
           <div className="bg-white rounded-xl border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
+            <div className="p-4 sm:p-6 border-b border-gray-200">
               <h3 className="text-lg font-bold text-gray-900">Question Review</h3>
             </div>
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               {quiz.questions.map((question, index) => {
                 const userAnswer = answers[question.id];
                 const isCorrect = userAnswer === question.correctAnswer;
                 
                 return (
-                  <div key={question.id} className="border border-gray-100 rounded-lg p-6">
+                  <div key={question.id} className="border border-gray-100 rounded-lg p-4 sm:p-6">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-2">
@@ -305,11 +305,11 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
                             <XCircle className="w-5 h-5 text-red-500" />
                           )}
                         </div>
-                        <h4 className="font-medium text-gray-900 mb-4">{question.question}</h4>
+                        <h4 className="font-medium text-gray-900 mb-4 text-sm sm:text-base">{question.question}</h4>
                       </div>
                     </div>
                     
-                    <div className="space-y-3">
+                    <div className="space-y-3 text-sm">
                       <div>
                         <span className="text-sm font-medium text-gray-500">Your Answer: </span>
                         <span className={`font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
@@ -344,30 +344,30 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-8 py-6">
+      <div className="bg-white border-b border-gray-200 px-4 sm:px-8 py-4 sm:py-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button
               onClick={handleBackClick}
-              className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+              className="flex items-center space-x-2 px-3 sm:px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Back to Quiz Overview</span>
+              <span className="hidden sm:inline">Back to Quiz Overview</span>
             </button>
-            <div className="h-6 w-px bg-gray-300"></div>
+            <div className="h-6 w-px bg-gray-300 hidden sm:block"></div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">{quiz.title}</h1>
-              <p className="text-gray-600">Question {currentQuestionIndex + 1} of {totalQuestions}</p>
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900">{quiz.title}</h1>
+              <p className="text-gray-600 text-sm">Question {currentQuestionIndex + 1} of {totalQuestions}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Progress Bar */}
-      <div className="bg-white border-b border-gray-200 px-8 py-4">
+      <div className="bg-white border-b border-gray-200 px-4 sm:px-8 py-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-700">Progress</span>
-          <span className="text-sm font-medium text-gray-700">{Math.round(progress)}%</span>
+          <span className="text-xs sm:text-sm font-medium text-gray-700">Progress</span>
+          <span className="text-xs sm:text-sm font-medium text-gray-700">{Math.round(progress)}%</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div 
@@ -378,22 +378,22 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
       </div>
 
       {/* Question Content */}
-      <div className="max-w-4xl mx-auto px-8 py-12">
-        <div className="bg-white rounded-xl border border-gray-200 p-8">
-          <div className="mb-8">
-            <div className="flex items-center space-x-2 mb-4">
-              <span className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs font-medium">
+      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-8 sm:py-12">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 sm:p-8">
+          <div className="mb-6 sm:mb-8">
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span className="bg-blue-100 text-blue-600 px-2 sm:px-3 py-1 rounded-full text-xs font-medium">
                 {currentQuestion.type.replace('-', ' ').toUpperCase()}
               </span>
-              <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-medium">
+              <span className="bg-gray-100 text-gray-600 px-2 sm:px-3 py-1 rounded-full text-xs font-medium">
                 {currentQuestion.difficulty.toUpperCase()}
               </span>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">{currentQuestion.question}</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">{currentQuestion.question}</h2>
           </div>
 
           {/* Answer Options */}
-          <div className="mb-8">
+          <div className="mb-6 sm:mb-8">
             {currentQuestion.type === 'multiple-choice' && currentQuestion.options && (
               <div className="space-y-3">
                 {currentQuestion.options.map((option, index) => (
@@ -406,7 +406,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
                       onChange={() => handleAnswerChange(index)}
                       className="mr-4 text-blue-600"
                     />
-                    <span className="text-gray-900">{option}</span>
+                    <span className="text-gray-900 text-sm sm:text-base">{option}</span>
                   </label>
                 ))}
               </div>
@@ -423,7 +423,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
                     onChange={() => handleAnswerChange(true)}
                     className="mr-4 text-blue-600"
                   />
-                  <span className="text-gray-900">True</span>
+                  <span className="text-gray-900 text-sm sm:text-base">True</span>
                 </label>
                 <label className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
                   <input
@@ -434,7 +434,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
                     onChange={() => handleAnswerChange(false)}
                     className="mr-4 text-blue-600"
                   />
-                  <span className="text-gray-900">False</span>
+                  <span className="text-gray-900 text-sm sm:text-base">False</span>
                 </label>
               </div>
             )}
@@ -446,18 +446,18 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
                   value={answers[currentQuestion.id] || ''}
                   onChange={(e) => handleAnswerChange(e.target.value)}
                   placeholder="Type your answer here..."
-                  className="w-full p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
                 />
               </div>
             )}
           </div>
 
           {/* Navigation */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
             <button
-              onClick={prevQuestion}
+              onClick={prevCard}
               disabled={currentQuestionIndex === 0}
-              className="flex items-center space-x-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Previous</span>
@@ -470,7 +470,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
             {currentQuestionIndex === totalQuestions - 1 ? (
               <button
                 onClick={submitQuiz}
-                className="flex items-center space-x-2 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm sm:text-base"
               >
                 <CheckCircle className="w-4 h-4" />
                 <span>Submit Quiz</span>
@@ -478,7 +478,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
             ) : (
               <button
                 onClick={nextQuestion}
-                className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm sm:text-base"
               >
                 <span>Next</span>
                 <ArrowRight className="w-4 h-4" />

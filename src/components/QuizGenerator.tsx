@@ -324,7 +324,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
   // New Quiz Confirmation Modal
   const NewQuizConfirmationModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-8 w-full max-w-md relative">
+      <div className="bg-white rounded-2xl p-6 sm:p-8 w-full max-w-md relative">
         <button
           onClick={() => setShowNewQuizConfirmation(false)}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
@@ -332,12 +332,12 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
           <X className="w-6 h-6" />
         </button>
 
-        <div className="text-center mb-8">
+        <div className="text-center mb-6 sm:mb-8">
           <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-8 h-8 text-orange-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Start New Quiz?</h2>
-          <p className="text-gray-600">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Start New Quiz?</h2>
+          <p className="text-gray-600 text-sm sm:text-base">
             This will clear your current progress and start fresh. Are you sure you want to continue?
           </p>
         </div>
@@ -345,13 +345,13 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
         <div className="flex space-x-4">
           <button
             onClick={() => setShowNewQuizConfirmation(false)}
-            className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+            className="flex-1 px-4 sm:px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm sm:text-base"
           >
             Cancel
           </button>
           <button
             onClick={handleNewQuizConfirmation}
-            className="flex-1 px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
+            className="flex-1 px-4 sm:px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium text-sm sm:text-base"
           >
             Start New Quiz
           </button>
@@ -362,13 +362,13 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
 
   if (currentStep === 'processing') {
     return (
-      <div className="p-8 flex items-center justify-center h-96">
+      <div className="p-4 sm:p-8 flex items-center justify-center h-96">
         <div className="text-center">
           <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mb-6 mx-auto">
             <Brain className="w-8 h-8 text-white animate-pulse" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">AI is analyzing your content...</h2>
-          <p className="text-gray-600 mb-6">This may take a few moments while we process your materials</p>
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">AI is analyzing your content...</h2>
+          <p className="text-gray-600 mb-6 text-sm sm:text-base">This may take a few moments while we process your materials</p>
           <div className="flex justify-center">
             <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />
           </div>
@@ -379,18 +379,18 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
 
   if (currentStep === 'review' && generatedQuiz) {
     return (
-      <div className="p-8 space-y-8">
+      <div className="p-4 sm:p-8 space-y-6 sm:space-y-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">{generatedQuiz.title}</h2>
-            <p className="text-gray-600">{generatedQuiz.description}</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">{generatedQuiz.title}</h2>
+            <p className="text-gray-600 text-sm sm:text-base">{generatedQuiz.description}</p>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
             <button
               onClick={handleTestApiKey}
               disabled={isTestingApiKey}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50"
+              className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50 text-sm"
             >
               {isTestingApiKey ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -401,7 +401,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             </button>
             <button
               onClick={() => setShowNewQuizConfirmation(true)}
-              className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl font-medium whitespace-nowrap"
+              className="flex items-center justify-center space-x-2 px-4 sm:px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl font-medium whitespace-nowrap text-sm sm:text-base"
             >
               <Plus className="w-4 h-4" />
               <span>New Quiz</span>
@@ -410,16 +410,16 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
         </div>
 
         {/* Enhanced Action Cards with Fixed Alignment */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
           {/* AI Audio Card */}
-          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-8 border border-purple-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-6 sm:p-8 border border-purple-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
             <div className="flex items-center space-x-4 mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
                 <Volume2 className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-gray-900">AI Audio</h3>
-                <p className="text-gray-600">Listen to AI-generated revision</p>
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900">AI Audio</h3>
+                <p className="text-gray-600 text-sm sm:text-base">Listen to AI-generated revision</p>
               </div>
             </div>
             
@@ -444,7 +444,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
               <button
                 onClick={handleNavigateToAudio}
                 disabled={isGeneratingAudio}
-                className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-indigo-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-indigo-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
               >
                 {isGeneratingAudio ? (
                   <>
@@ -467,14 +467,14 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
           </div>
 
           {/* Study Flashcards Card */}
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 border border-blue-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 sm:p-8 border border-blue-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
             <div className="flex items-center space-x-4 mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
                 <BookOpen className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-gray-900">Study Flashcards</h3>
-                <p className="text-gray-600">Review key concepts first</p>
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900">Study Flashcards</h3>
+                <p className="text-gray-600 text-sm sm:text-base">Review key concepts first</p>
               </div>
             </div>
             
@@ -487,7 +487,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             <div className="mt-auto">
               <button 
                 onClick={handleNavigateToFlashcards}
-                className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-blue-600 hover:to-indigo-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-xl font-semibold hover:from-blue-600 hover:to-indigo-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 text-sm sm:text-base"
               >
                 <BookOpen className="w-5 h-5" />
                 <span>Study Cards</span>
@@ -496,14 +496,14 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
           </div>
 
           {/* Take Quiz Card */}
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-8 border border-green-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 sm:p-8 border border-green-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
             <div className="flex items-center space-x-4 mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
                 <Play className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-gray-900">Take Quiz</h3>
-                <p className="text-gray-600">Test your knowledge</p>
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900">Take Quiz</h3>
+                <p className="text-gray-600 text-sm sm:text-base">Test your knowledge</p>
               </div>
             </div>
             
@@ -516,7 +516,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             <div className="mt-auto">
               <button 
                 onClick={handleStartQuiz}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 text-sm sm:text-base"
               >
                 <Play className="w-5 h-5" />
                 <span>Start Quiz</span>
@@ -527,12 +527,12 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
 
         {/* Quiz Overview */}
         <div className="bg-white rounded-xl border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
+          <div className="p-4 sm:p-6 border-b border-gray-200">
             <h3 className="text-lg font-bold text-gray-900">Quiz Overview</h3>
           </div>
-          <div className="p-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <div className="p-4 sm:p-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+              <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
                 <div className="flex items-center space-x-3">
                   <Target className="w-5 h-5 text-purple-500" />
                   <div>
@@ -541,7 +541,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
                   </div>
                 </div>
               </div>
-              <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
                 <div className="flex items-center space-x-3">
                   <Clock className="w-5 h-5 text-blue-500" />
                   <div>
@@ -550,7 +550,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
                   </div>
                 </div>
               </div>
-              <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
                 <div className="flex items-center space-x-3">
                   <BookOpen className="w-5 h-5 text-green-500" />
                   <div>
@@ -559,7 +559,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
                   </div>
                 </div>
               </div>
-              <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
                 <div className="flex items-center space-x-3">
                   <Volume2 className="w-5 h-5 text-purple-500" />
                   <div>
@@ -571,8 +571,8 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             </div>
 
             {/* Quiz Guidelines */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-              <h4 className="font-bold text-blue-900 mb-4 flex items-center">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 sm:p-6">
+              <h4 className="font-bold text-blue-900 mb-4 flex items-center text-sm sm:text-base">
                 <AlertCircle className="w-5 h-5 mr-2" />
                 Study Guidelines
               </h4>
@@ -616,12 +616,12 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
 
   return (
     <div className="relative">
-      <div className="p-8 space-y-8 pb-32">
+      <div className="p-4 sm:p-8 space-y-6 sm:space-y-8 pb-32">
         {/* Header with Settings Button */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900">AI Quiz Generator</h2>
-            <p className="text-gray-600">Transform your notes into interactive quizzes, flashcards, and audio guides</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">AI Quiz Generator</h2>
+            <p className="text-gray-600 text-sm sm:text-base">Transform your notes into interactive quizzes, flashcards, and audio guides</p>
             {!hasOpenAIKey && (
               <div className="mt-2 flex items-center space-x-2 text-orange-600">
                 <AlertCircle className="w-4 h-4" />
@@ -629,11 +629,11 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
               </div>
             )}
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
             <button
               onClick={handleTestApiKey}
               disabled={isTestingApiKey}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50"
+              className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50 text-sm"
             >
               {isTestingApiKey ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -644,7 +644,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             </button>
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="flex items-center space-x-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="flex items-center justify-center space-x-2 px-4 sm:px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm sm:text-base"
             >
               <Settings className="w-4 h-4" />
               <span>Settings</span>
@@ -655,7 +655,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
 
         {/* API Key Status */}
         {!hasOpenAIKey && (
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-6">
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 sm:p-6">
             <div className="flex items-center space-x-3">
               <Key className="w-6 h-6 text-orange-600" />
               <div>
@@ -672,7 +672,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
         )}
 
         {/* Content Length Indicator */}
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-medium text-gray-900">Content Length</h3>
             <span className={`text-sm font-medium ${hasMinimumContent ? 'text-green-600' : 'text-orange-600'}`}>
@@ -697,8 +697,8 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
 
         {/* Settings Panel */}
         {showSettings && (
-          <div className="bg-white rounded-xl p-8 border border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="bg-white rounded-xl p-6 sm:p-8 border border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
               <div className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -806,10 +806,10 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
         )}
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 sm:gap-8">
           {/* Upload Files Section - Expanded */}
-          <div className="lg:col-span-3 space-y-8">
-            <div className="bg-white rounded-xl p-8 border border-gray-200">
+          <div className="lg:col-span-3 space-y-6 sm:space-y-8">
+            <div className="bg-white rounded-xl p-6 sm:p-8 border border-gray-200">
               <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center">
                 <Upload className="w-5 h-5 mr-2" />
                 Upload Files
@@ -817,31 +817,31 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
               
               <div
                 {...getRootProps()}
-                className={`border-2 border-dashed rounded-xl p-8 lg:p-12 text-center cursor-pointer transition-all duration-300 ${
+                className={`border-2 border-dashed rounded-xl p-6 sm:p-8 lg:p-12 text-center cursor-pointer transition-all duration-300 ${
                   isDragActive 
                     ? 'border-purple-400 bg-purple-50' 
                     : 'border-gray-300 hover:border-purple-400 hover:bg-gray-50'
                 }`}
               >
                 <input {...getInputProps()} />
-                <div className="space-y-6">
-                  <div className="flex justify-center space-x-6">
-                    <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <Image className="w-8 h-8 text-blue-600" />
+                <div className="space-y-4 sm:space-y-6">
+                  <div className="flex justify-center space-x-4 sm:space-x-6">
+                    <div className="w-12 sm:w-16 h-12 sm:h-16 bg-blue-100 rounded-xl flex items-center justify-center">
+                      <Image className="w-6 sm:w-8 h-6 sm:h-8 text-blue-600" />
                     </div>
-                    <div className="w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center">
-                      <FileText className="w-8 h-8 text-green-600" />
+                    <div className="w-12 sm:w-16 h-12 sm:h-16 bg-green-100 rounded-xl flex items-center justify-center">
+                      <FileText className="w-6 sm:w-8 h-6 sm:h-8 text-green-600" />
                     </div>
                   </div>
                   <div>
-                    <p className="text-xl font-medium text-gray-900 mb-2">
+                    <p className="text-lg sm:text-xl font-medium text-gray-900 mb-2">
                       {isDragActive ? 'Drop files here' : 'Drag & drop your notes'}
                     </p>
-                    <p className="text-gray-500">
+                    <p className="text-gray-500 text-sm sm:text-base">
                       Support for images, PDFs, and text files (max 10MB)
                     </p>
                   </div>
-                  <button className="bg-purple-500 text-white px-8 py-3 rounded-lg hover:bg-purple-600 transition-colors font-medium">
+                  <button className="bg-purple-500 text-white px-6 sm:px-8 py-3 rounded-lg hover:bg-purple-600 transition-colors font-medium text-sm sm:text-base">
                     Browse Files
                   </button>
                 </div>
@@ -849,7 +849,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
 
               {/* Uploaded Files */}
               {uploadedFiles.length > 0 && (
-                <div className="mt-8 space-y-4">
+                <div className="mt-6 sm:mt-8 space-y-4">
                   <h4 className="font-medium text-gray-900">Uploaded Files</h4>
                   <div className="space-y-3">
                     {uploadedFiles.map(file => (
@@ -899,7 +899,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             </div>
 
             {/* Text Input */}
-            <div className="bg-white rounded-xl p-8 border border-gray-200">
+            <div className="bg-white rounded-xl p-6 sm:p-8 border border-gray-200">
               <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center">
                 <Type className="w-5 h-5 mr-2" />
                 Or Paste Text
@@ -908,7 +908,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
                 value={textInput}
                 onChange={(e) => setTextInput(e.target.value)}
                 placeholder="Paste your notes, lecture content, or study material here..."
-                className="w-full h-48 p-6 border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                className="w-full h-32 sm:h-48 p-4 sm:p-6 border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
               />
               <div className="mt-2 text-sm text-gray-500">
                 {textInput.trim().split(/\s+/).filter(word => word.length > 0).length} words
@@ -917,11 +917,11 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
           </div>
 
           {/* Content Preview & Actions - Expanded */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className="lg:col-span-2 space-y-6 sm:space-y-8">
             {/* Content Preview */}
-            <div className="bg-white rounded-xl p-8 border border-gray-200">
+            <div className="bg-white rounded-xl p-6 sm:p-8 border border-gray-200">
               <h3 className="text-lg font-bold text-gray-900 mb-6">Content Preview</h3>
-              <div className="bg-gray-50 rounded-lg p-6 h-64 lg:h-80 overflow-y-auto">
+              <div className="bg-gray-50 rounded-lg p-4 sm:p-6 h-48 sm:h-64 lg:h-80 overflow-y-auto">
                 {uploadedFiles.length > 0 || textInput ? (
                   <div className="space-y-4">
                     {textInput && (
@@ -946,32 +946,32 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
             </div>
 
             {/* What You'll Get */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-8 border border-purple-100">
+            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 sm:p-8 border border-purple-100">
               <h3 className="font-bold text-gray-900 mb-6">What You'll Get</h3>
               <div className="space-y-4">
                 <div className="flex items-center space-x-4">
                   <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Target className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-gray-700">{quizSettings.questionCount} AI-generated questions</span>
+                  <span className="text-gray-700 text-sm sm:text-base">{quizSettings.questionCount} AI-generated questions</span>
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="w-10 h-10 bg-pink-500 rounded-lg flex items-center justify-center flex-shrink-0">
                     <BookOpen className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-gray-700">Interactive flashcards</span>
+                  <span className="text-gray-700 text-sm sm:text-base">Interactive flashcards</span>
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Volume2 className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-gray-700">AI audio revision guide</span>
+                  <span className="text-gray-700 text-sm sm:text-base">AI audio revision guide</span>
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Languages className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-gray-700">Multi-language support</span>
+                  <span className="text-gray-700 text-sm sm:text-base">Multi-language support</span>
                 </div>
               </div>
             </div>
@@ -980,12 +980,12 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onNavigate, initialGenera
       </div>
 
       {/* Fixed Generate Button at Bottom */}
-      <div className="fixed bottom-0 left-64 right-0 bg-white border-t border-gray-200 p-6 z-10">
-        <div className="max-w-full">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 sm:p-6 z-10">
+        <div className="max-w-full lg:max-w-[calc(100%-16rem)] lg:ml-64">
           <button
             onClick={handleGenerateQuiz}
             disabled={!hasMinimumContent || isGenerating || !hasOpenAIKey}
-            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 shadow-lg hover:shadow-xl"
+            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 shadow-lg hover:shadow-xl text-sm sm:text-base"
           >
             {isGenerating ? (
               <>

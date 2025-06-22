@@ -1,87 +1,64 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
+  Plus, 
+  Search, 
+  Filter, 
+  Clock, 
+  User, 
   MessageSquare, 
   Share2, 
-  Settings, 
-  Mic, 
-  MicOff, 
-  Video, 
-  VideoOff,
-  Phone,
-  MoreVertical,
-  Send,
-  Paperclip,
-  Smile,
-  Search,
-  Filter,
-  Plus,
-  X,
-  Edit3,
-  Trash2,
-  Copy,
-  ExternalLink,
-  Crown,
-  Shield,
-  User,
-  Clock,
-  Hash,
+  Settings,
   Globe,
   Lock,
   Calendar,
   BookOpen,
   Brain,
-  FileText,
-  Image,
-  Palette,
-  Square,
-  Circle,
-  Triangle,
-  Minus,
-  Type,
-  Eraser,
-  RotateCcw,
-  Download,
-  Upload,
-  Save,
-  Undo,
-  Redo,
-  ZoomIn,
-  ZoomOut,
-  Move,
-  MousePointer
+  Presentation,
+  MessageCircle,
+  Send,
+  Paperclip,
+  MoreVertical,
+  Copy,
+  ExternalLink,
+  UserPlus,
+  Crown,
+  Shield,
+  X,
+  ArrowLeft,
+  Hash,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
-
-interface StudyRoomProps {
-  onNavigate?: (page: string) => void;
-}
 
 interface StudyRoom {
   id: string;
   name: string;
   description: string;
   subject: string;
-  difficulty: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
   max_participants: number;
   is_public: boolean;
   created_by: string;
-  session_type: string;
+  session_type: 'study' | 'quiz' | 'discussion' | 'presentation';
   tags: string[];
   room_code: string;
-  status: string;
+  status: 'active' | 'scheduled' | 'ended';
   scheduled_for?: string;
   created_at: string;
+  updated_at: string;
   participant_count?: number;
   creator_name?: string;
 }
 
 interface RoomParticipant {
   id: string;
+  room_id: string;
   user_id: string;
-  role: string;
+  role: 'host' | 'moderator' | 'participant';
   joined_at: string;
   is_active: boolean;
   user_name?: string;
@@ -89,142 +66,75 @@ interface RoomParticipant {
 
 interface RoomMessage {
   id: string;
+  room_id: string;
   user_id: string;
   message: string;
-  message_type: string;
+  message_type: 'text' | 'file' | 'quiz_share' | 'system';
   created_at: string;
   user_name?: string;
 }
 
-interface SharedContent {
-  id: string;
-  user_id: string;
-  content_type: string;
-  content_id?: string;
-  shared_at: string;
-  user_name?: string;
-  content_title?: string;
+interface StudyRoomProps {
+  onNavigate?: (page: string) => void;
 }
 
 const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'browse' | 'room'>('browse');
-  const [selectedRoom, setSelectedRoom] = useState<StudyRoom | null>(null);
+  const [currentView, setCurrentView] = useState<'browse' | 'room' | 'create'>('browse');
   const [rooms, setRooms] = useState<StudyRoom[]>([]);
+  const [currentRoom, setCurrentRoom] = useState<StudyRoom | null>(null);
+  const [participants, setParticipants] = useState<RoomParticipant[]>([]);
+  const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
+  const [newMessage, setNewMessage] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
-
-  // Room state
-  const [participants, setParticipants] = useState<RoomParticipant[]>([]);
-  const [messages, setMessages] = useState<RoomMessage[]>([]);
-  const [sharedContent, setSharedContent] = useState<SharedContent[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [activeTab, setActiveTab] = useState<'chat' | 'participants' | 'resources' | 'whiteboard'>('chat');
-  
-  // Audio/Video state
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  
-  // Whiteboard state
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line' | 'rectangle' | 'circle' | 'text'>('pen');
-  const [currentColor, setCurrentColor] = useState('#000000');
-  const [brushSize, setBrushSize] = useState(2);
-  const [lastPosition, setLastPosition] = useState<{ x: number; y: number } | null>(null);
-
-  // Refs to prevent unwanted scrolling
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const chatContainerRef = useRef<HTMLDivElement>(null);
-  const isUserScrollingRef = useRef(false);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Create room form state
   const [createForm, setCreateForm] = useState({
     name: '',
     description: '',
     subject: '',
-    difficulty: 'beginner',
-    session_type: 'study',
+    difficulty: 'beginner' as const,
     max_participants: 10,
     is_public: true,
+    session_type: 'study' as const,
+    tags: [] as string[],
     scheduled_for: ''
   });
 
-  // Load rooms on component mount
   useEffect(() => {
     if (user) {
       loadRooms();
     }
   }, [user]);
 
-  // Auto-scroll to bottom only when appropriate
-  const scrollToBottom = useCallback(() => {
-    if (!isUserScrollingRef.current && messagesEndRef.current && chatContainerRef.current) {
-      const container = chatContainerRef.current;
-      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-      
-      if (isNearBottom) {
-        messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }
-    }
-  }, []);
-
-  // Handle user scrolling detection
-  const handleScroll = useCallback(() => {
-    isUserScrollingRef.current = true;
-    
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-    }
-    
-    scrollTimeoutRef.current = setTimeout(() => {
-      isUserScrollingRef.current = false;
-    }, 1000);
-  }, []);
-
-  // Scroll to bottom when new messages arrive (only if user is near bottom)
-  useEffect(() => {
-    if (messages.length > 0) {
-      scrollToBottom();
-    }
-  }, [messages, scrollToBottom]);
-
-  // Set up scroll event listener
-  useEffect(() => {
-    const container = chatContainerRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      return () => {
-        container.removeEventListener('scroll', handleScroll);
-        if (scrollTimeoutRef.current) {
-          clearTimeout(scrollTimeoutRef.current);
-        }
-      };
-    }
-  }, [handleScroll]);
-
   const loadRooms = async () => {
+    if (!user) return;
+
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // Load public rooms and rooms created by user
+      const { data: roomsData, error } = await supabase
         .from('study_rooms')
         .select(`
           *,
           profiles!study_rooms_created_by_fkey(full_name)
         `)
+        .or(`is_public.eq.true,created_by.eq.${user.id}`)
         .eq('status', 'active')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
+      // Get participant counts for each room
       const roomsWithCounts = await Promise.all(
-        (data || []).map(async (room) => {
+        (roomsData || []).map(async (room) => {
           const { count } = await supabase
             .from('room_participants')
             .select('*', { count: 'exact', head: true })
@@ -252,15 +162,16 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!user) return;
 
     try {
+      // Generate unique room code
       const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      
+
       const { data: room, error } = await supabase
         .from('study_rooms')
         .insert({
           ...createForm,
           created_by: user.id,
           room_code: roomCode,
-          tags: createForm.subject ? [createForm.subject] : []
+          status: createForm.scheduled_for ? 'scheduled' : 'active'
         })
         .select()
         .single();
@@ -283,15 +194,14 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         description: '',
         subject: '',
         difficulty: 'beginner',
-        session_type: 'study',
         max_participants: 10,
         is_public: true,
+        session_type: 'study',
+        tags: [],
         scheduled_for: ''
       });
       
-      // Join the created room
-      joinRoom(room);
-      loadRooms();
+      await loadRooms();
     } catch (error: any) {
       console.error('Error creating room:', error);
       toast.error('Failed to create study room');
@@ -302,47 +212,46 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!user) return;
 
     try {
-      // Check if any participant record exists for this user and room (active or inactive)
-      const { data: existingParticipants, error: checkError } = await supabase
+      // Check if user is already a participant
+      const { data: existingParticipant } = await supabase
         .from('room_participants')
         .select('*')
         .eq('room_id', room.id)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .single();
 
-      if (checkError) throw checkError;
-
-      if (existingParticipants && existingParticipants.length > 0) {
-        // Update existing participant record to active
-        const existingParticipant = existingParticipants[0];
-        const { error: updateError } = await supabase
-          .from('room_participants')
-          .update({ 
-            is_active: true,
-            joined_at: new Date().toISOString()
-          })
-          .eq('id', existingParticipant.id);
-
-        if (updateError) throw updateError;
+      if (existingParticipant) {
+        if (existingParticipant.is_active) {
+          // User is already active in the room
+          setCurrentRoom(room);
+          setCurrentView('room');
+          await loadRoomData(room.id);
+          return;
+        } else {
+          // Reactivate the participant
+          await supabase
+            .from('room_participants')
+            .update({ is_active: true, joined_at: new Date().toISOString() })
+            .eq('id', existingParticipant.id);
+        }
       } else {
-        // No existing record found, insert new participant
-        const { error: insertError } = await supabase
+        // Add new participant
+        await supabase
           .from('room_participants')
           .insert({
             room_id: room.id,
             user_id: user.id,
             role: 'participant'
           });
-
-        if (insertError) throw insertError;
       }
 
-      setSelectedRoom(room);
+      setCurrentRoom(room);
       setCurrentView('room');
-      loadRoomData(room.id);
+      await loadRoomData(room.id);
       toast.success(`Joined ${room.name}!`);
     } catch (error: any) {
       console.error('Error joining room:', error);
-      toast.error('Failed to join study room');
+      toast.error('Failed to join room');
     }
   };
 
@@ -371,6 +280,26 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     }
   };
 
+  const leaveRoom = async () => {
+    if (!user || !currentRoom) return;
+
+    try {
+      await supabase
+        .from('room_participants')
+        .update({ is_active: false })
+        .eq('room_id', currentRoom.id)
+        .eq('user_id', user.id);
+
+      toast.success('Left the room');
+      setCurrentView('browse');
+      setCurrentRoom(null);
+      await loadRooms();
+    } catch (error: any) {
+      console.error('Error leaving room:', error);
+      toast.error('Failed to leave room');
+    }
+  };
+
   const loadRoomData = async (roomId: string) => {
     try {
       // Load participants
@@ -381,7 +310,8 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           profiles!room_participants_user_id_fkey(full_name)
         `)
         .eq('room_id', roomId)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .order('joined_at', { ascending: true });
 
       if (participantsError) throw participantsError;
 
@@ -411,27 +341,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           user_name: m.profiles?.full_name || 'Unknown User'
         }))
       );
-
-      // Load shared content
-      const { data: contentData, error: contentError } = await supabase
-        .from('room_shared_content')
-        .select(`
-          *,
-          profiles!room_shared_content_user_id_fkey(full_name)
-        `)
-        .eq('room_id', roomId)
-        .order('shared_at', { ascending: false });
-
-      if (contentError) throw contentError;
-
-      setSharedContent(
-        (contentData || []).map(c => ({
-          ...c,
-          user_name: c.profiles?.full_name || 'Unknown User',
-          content_title: `${c.content_type} shared by ${c.profiles?.full_name || 'Unknown User'}`
-        }))
-      );
-
     } catch (error: any) {
       console.error('Error loading room data:', error);
       toast.error('Failed to load room data');
@@ -439,28 +348,13 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   };
 
   const sendMessage = async () => {
-    if (!user || !selectedRoom || !newMessage.trim()) return;
+    if (!user || !currentRoom || !newMessage.trim()) return;
 
     try {
-      // First verify the user is an active participant in the room
-      const { data: participantCheck, error: participantError } = await supabase
-        .from('room_participants')
-        .select('id')
-        .eq('room_id', selectedRoom.id)
-        .eq('user_id', user.id)
-        .eq('is_active', true);
-
-      if (participantError) throw participantError;
-
-      if (!participantCheck || participantCheck.length === 0) {
-        toast.error('You must be an active participant to send messages');
-        return;
-      }
-
       const { error } = await supabase
         .from('room_messages')
         .insert({
-          room_id: selectedRoom.id,
+          room_id: currentRoom.id,
           user_id: user.id,
           message: newMessage.trim(),
           message_type: 'text'
@@ -469,86 +363,20 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       if (error) throw error;
 
       setNewMessage('');
-      // Reload messages to get the new one
-      loadRoomData(selectedRoom.id);
+      await loadRoomData(currentRoom.id);
     } catch (error: any) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
     }
   };
 
-  const leaveRoom = () => {
-    setSelectedRoom(null);
-    setCurrentView('browse');
-    setParticipants([]);
-    setMessages([]);
-    setSharedContent([]);
-    setActiveTab('chat');
-    // Reset scroll state
-    isUserScrollingRef.current = false;
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
+  const copyRoomCode = () => {
+    if (currentRoom) {
+      navigator.clipboard.writeText(currentRoom.room_code);
+      toast.success('Room code copied to clipboard!');
     }
   };
 
-  // Whiteboard functions
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current) return;
-    
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    setIsDrawing(true);
-    setLastPosition({ x, y });
-    
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-    }
-  };
-
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !canvasRef.current || !lastPosition) return;
-    
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.lineWidth = brushSize;
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = currentTool === 'eraser' ? '#ffffff' : currentColor;
-      
-      if (currentTool === 'pen' || currentTool === 'eraser') {
-        ctx.lineTo(x, y);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-      }
-    }
-    
-    setLastPosition({ x, y });
-  };
-
-  const stopDrawing = () => {
-    setIsDrawing(false);
-    setLastPosition(null);
-  };
-
-  const clearCanvas = () => {
-    if (!canvasRef.current) return;
-    const ctx = canvasRef.current.getContext('2d');
-    if (ctx) {
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    }
-  };
-
-  // Filter rooms based on search and filters
   const filteredRooms = rooms.filter(room => {
     const matchesSearch = room.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          room.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -560,8 +388,216 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     return matchesSearch && matchesSubject && matchesDifficulty;
   });
 
-  const subjects = ['Mathematics', 'Science', 'History', 'Literature', 'Computer Science', 'Languages', 'Art', 'Music'];
-  const difficulties = ['beginner', 'intermediate', 'advanced'];
+  const getSessionTypeIcon = (type: string) => {
+    switch (type) {
+      case 'study': return <BookOpen className="w-4 h-4" />;
+      case 'quiz': return <Brain className="w-4 h-4" />;
+      case 'discussion': return <MessageCircle className="w-4 h-4" />;
+      case 'presentation': return <Presentation className="w-4 h-4" />;
+      default: return <BookOpen className="w-4 h-4" />;
+    }
+  };
+
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty) {
+      case 'beginner': return 'bg-green-100 text-green-800';
+      case 'intermediate': return 'bg-yellow-100 text-yellow-800';
+      case 'advanced': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'host': return <Crown className="w-4 h-4 text-yellow-500" />;
+      case 'moderator': return <Shield className="w-4 h-4 text-blue-500" />;
+      default: return <User className="w-4 h-4 text-gray-500" />;
+    }
+  };
+
+  // Create Room Modal
+  const CreateRoomModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Create Study Room</h2>
+          <button
+            onClick={() => setShowCreateModal(false)}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Room Name *
+            </label>
+            <input
+              type="text"
+              value={createForm.name}
+              onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
+              className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Enter room name..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description
+            </label>
+            <textarea
+              value={createForm.description}
+              onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
+              className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 resize-none"
+              placeholder="Describe what this room is about..."
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Subject *
+              </label>
+              <input
+                type="text"
+                value={createForm.subject}
+                onChange={(e) => setCreateForm(prev => ({ ...prev, subject: e.target.value }))}
+                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Mathematics, Biology..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Difficulty
+              </label>
+              <select
+                value={createForm.difficulty}
+                onChange={(e) => setCreateForm(prev => ({ ...prev, difficulty: e.target.value as any }))}
+                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Session Type
+              </label>
+              <select
+                value={createForm.session_type}
+                onChange={(e) => setCreateForm(prev => ({ ...prev, session_type: e.target.value as any }))}
+                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="study">Study Session</option>
+                <option value="quiz">Quiz Practice</option>
+                <option value="discussion">Discussion</option>
+                <option value="presentation">Presentation</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Max Participants
+              </label>
+              <input
+                type="number"
+                min="2"
+                max="100"
+                value={createForm.max_participants}
+                onChange={(e) => setCreateForm(prev => ({ ...prev, max_participants: parseInt(e.target.value) }))}
+                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              id="is_public"
+              checked={createForm.is_public}
+              onChange={(e) => setCreateForm(prev => ({ ...prev, is_public: e.target.checked }))}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="is_public" className="text-sm text-gray-700">
+              Make this room public (others can discover and join)
+            </label>
+          </div>
+
+          <div className="flex space-x-4">
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={createRoom}
+              disabled={!createForm.name || !createForm.subject}
+              className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Create Room
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Join Room Modal
+  const JoinRoomModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-md">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Join Room</h2>
+          <button
+            onClick={() => setShowJoinModal(false)}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Room Code
+            </label>
+            <input
+              type="text"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-mono"
+              placeholder="Enter 6-digit code"
+              maxLength={6}
+            />
+          </div>
+
+          <div className="flex space-x-4">
+            <button
+              onClick={() => setShowJoinModal(false)}
+              className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={joinRoomByCode}
+              disabled={joinCode.length !== 6}
+              className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Join Room
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -574,358 +610,119 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     );
   }
 
-  if (currentView === 'room' && selectedRoom) {
+  if (currentView === 'room' && currentRoom) {
     return (
-      <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+      <div className="min-h-screen bg-gray-50 flex flex-col">
         {/* Room Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
+        <div className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
-                onClick={leaveRoom}
+                onClick={() => setCurrentView('browse')}
                 className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
               >
-                <X className="w-4 h-4" />
-                <span>Leave Room</span>
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back to Rooms</span>
               </button>
               <div className="h-6 w-px bg-gray-300"></div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">{selectedRoom.name}</h1>
+                <h1 className="text-xl font-bold text-gray-900">{currentRoom.name}</h1>
                 <div className="flex items-center space-x-4 text-sm text-gray-500">
-                  <span className="flex items-center">
-                    <Users className="w-4 h-4 mr-1" />
-                    {participants.length} participants
+                  <span className="flex items-center space-x-1">
+                    <Hash className="w-4 h-4" />
+                    <span>{currentRoom.room_code}</span>
                   </span>
-                  <span className="flex items-center">
-                    <Hash className="w-4 h-4 mr-1" />
-                    {selectedRoom.room_code}
-                  </span>
-                  <span className="flex items-center">
-                    <BookOpen className="w-4 h-4 mr-1" />
-                    {selectedRoom.subject}
+                  <span className="flex items-center space-x-1">
+                    <Users className="w-4 h-4" />
+                    <span>{participants.length} participants</span>
                   </span>
                 </div>
               </div>
             </div>
-            
-            {/* Audio/Video Controls */}
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-3">
               <button
-                onClick={() => setIsMuted(!isMuted)}
-                className={`p-3 rounded-full transition-colors ${
-                  isMuted ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                onClick={copyRoomCode}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
               >
-                {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                <Copy className="w-4 h-4" />
+                <span>Copy Code</span>
               </button>
               <button
-                onClick={() => setIsVideoOff(!isVideoOff)}
-                className={`p-3 rounded-full transition-colors ${
-                  isVideoOff ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                onClick={leaveRoom}
+                className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
               >
-                {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
-              </button>
-              <button className="p-3 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors">
-                <Phone className="w-5 h-5" />
+                <X className="w-4 h-4" />
+                <span>Leave Room</span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* Room Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Main Content Area */}
+        <div className="flex-1 flex">
+          {/* Main Chat Area */}
           <div className="flex-1 flex flex-col">
-            {/* Tab Navigation */}
-            <div className="bg-white border-b border-gray-200 px-6 flex-shrink-0">
-              <div className="flex space-x-8">
-                {[
-                  { id: 'chat', label: 'Chat', icon: MessageSquare },
-                  { id: 'participants', label: 'Participants', icon: Users },
-                  { id: 'resources', label: 'Resources', icon: FileText },
-                  { id: 'whiteboard', label: 'Whiteboard', icon: Edit3 }
-                ].map(tab => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id as any)}
-                      className={`flex items-center space-x-2 py-4 px-2 border-b-2 transition-colors ${
-                        activeTab === tab.id
-                          ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      <span className="font-medium">{tab.label}</span>
-                    </button>
-                  );
-                })}
+            {/* Messages */}
+            <div className="flex-1 p-6 overflow-y-auto">
+              <div className="space-y-4">
+                {messages.map((message) => (
+                  <div key={message.id} className="flex items-start space-x-3">
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                      {message.user_name?.charAt(0) || 'U'}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <span className="font-medium text-gray-900">{message.user_name}</span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(message.created_at).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <p className="text-gray-700">{message.message}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Tab Content */}
-            <div className="flex-1 overflow-hidden">
-              {activeTab === 'chat' && (
-                <div className="h-full flex flex-col">
-                  {/* Messages */}
-                  <div 
-                    ref={chatContainerRef}
-                    className="flex-1 overflow-y-auto p-6 space-y-4"
-                  >
-                    {messages.map(message => (
-                      <div key={message.id} className="flex space-x-3">
-                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
-                          {message.user_name?.charAt(0) || 'U'}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <span className="font-medium text-gray-900">{message.user_name}</span>
-                            <span className="text-xs text-gray-500">
-                              {new Date(message.created_at).toLocaleTimeString()}
-                            </span>
-                          </div>
-                          <p className="text-gray-700">{message.message}</p>
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                  </div>
+            {/* Message Input */}
+            <div className="border-t border-gray-200 p-4">
+              <div className="flex items-center space-x-3">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  className="flex-1 p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Type a message..."
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={!newMessage.trim()}
+                  className="p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
 
-                  {/* Message Input */}
-                  <div className="border-t border-gray-200 p-4 flex-shrink-0">
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="text"
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                        placeholder="Type a message..."
-                        className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                      <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                        <Paperclip className="w-5 h-5" />
-                      </button>
-                      <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                        <Smile className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={sendMessage}
-                        disabled={!newMessage.trim()}
-                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Send className="w-4 h-4" />
-                      </button>
+          {/* Participants Sidebar */}
+          <div className="w-80 bg-white border-l border-gray-200 p-6">
+            <h3 className="font-bold text-gray-900 mb-4">Participants ({participants.length})</h3>
+            <div className="space-y-3">
+              {participants.map((participant) => (
+                <div key={participant.id} className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50">
+                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                    {participant.user_name?.charAt(0) || 'U'}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{participant.user_name}</p>
+                    <div className="flex items-center space-x-1">
+                      {getRoleIcon(participant.role)}
+                      <span className="text-xs text-gray-500 capitalize">{participant.role}</span>
                     </div>
                   </div>
                 </div>
-              )}
-
-              {activeTab === 'participants' && (
-                <div className="p-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">
-                    Participants ({participants.length})
-                  </h3>
-                  <div className="space-y-3">
-                    {participants.map(participant => (
-                      <div key={participant.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
-                            {participant.user_name?.charAt(0) || 'U'}
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{participant.user_name}</p>
-                            <div className="flex items-center space-x-2">
-                              {participant.role === 'host' && (
-                                <span className="flex items-center text-xs text-yellow-600">
-                                  <Crown className="w-3 h-3 mr-1" />
-                                  Host
-                                </span>
-                              )}
-                              {participant.role === 'moderator' && (
-                                <span className="flex items-center text-xs text-blue-600">
-                                  <Shield className="w-3 h-3 mr-1" />
-                                  Moderator
-                                </span>
-                              )}
-                              {participant.role === 'participant' && (
-                                <span className="flex items-center text-xs text-gray-500">
-                                  <User className="w-3 h-3 mr-1" />
-                                  Participant
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="text-xs text-gray-500">Online</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'resources' && (
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-bold text-gray-900">Shared Resources</h3>
-                    <button className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
-                      <Plus className="w-4 h-4" />
-                      <span>Share Resource</span>
-                    </button>
-                  </div>
-                  
-                  {sharedContent.length === 0 ? (
-                    <div className="text-center py-12">
-                      <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                      <h4 className="text-lg font-medium text-gray-900 mb-2">No resources shared yet</h4>
-                      <p className="text-gray-500">Share quizzes, materials, and files with the group</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {sharedContent.map(content => (
-                        <div key={content.id} className="p-4 bg-white rounded-lg border border-gray-200">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                content.content_type === 'quiz' ? 'bg-purple-100' :
-                                content.content_type === 'flashcard_set' ? 'bg-blue-100' :
-                                content.content_type === 'study_material' ? 'bg-green-100' : 'bg-gray-100'
-                              }`}>
-                                {content.content_type === 'quiz' && <Brain className="w-5 h-5 text-purple-600" />}
-                                {content.content_type === 'flashcard_set' && <BookOpen className="w-5 h-5 text-blue-600" />}
-                                {content.content_type === 'study_material' && <FileText className="w-5 h-5 text-green-600" />}
-                                {content.content_type === 'file' && <Image className="w-5 h-5 text-gray-600" />}
-                              </div>
-                              <div>
-                                <p className="font-medium text-gray-900">{content.content_title}</p>
-                                <p className="text-sm text-gray-500">
-                                  Shared by {content.user_name} • {new Date(content.shared_at).toLocaleString()}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <button className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
-                                <ExternalLink className="w-4 h-4" />
-                              </button>
-                              <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                                <Download className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'whiteboard' && (
-                <div className="h-full flex flex-col">
-                  {/* Whiteboard Tools */}
-                  <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between flex-shrink-0">
-                    <div className="flex items-center space-x-4">
-                      {/* Drawing Tools */}
-                      <div className="flex items-center space-x-2">
-                        {[
-                          { tool: 'pen', icon: Edit3, label: 'Pen' },
-                          { tool: 'eraser', icon: Eraser, label: 'Eraser' },
-                          { tool: 'line', icon: Minus, label: 'Line' },
-                          { tool: 'rectangle', icon: Square, label: 'Rectangle' },
-                          { tool: 'circle', icon: Circle, label: 'Circle' },
-                          { tool: 'text', icon: Type, label: 'Text' }
-                        ].map(({ tool, icon: Icon, label }) => (
-                          <button
-                            key={tool}
-                            onClick={() => setCurrentTool(tool as any)}
-                            className={`p-2 rounded-lg transition-colors ${
-                              currentTool === tool
-                                ? 'bg-blue-500 text-white'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            }`}
-                            title={label}
-                          >
-                            <Icon className="w-4 h-4" />
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="h-6 w-px bg-gray-300"></div>
-
-                      {/* Color Picker */}
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm text-gray-600">Color:</span>
-                        <input
-                          type="color"
-                          value={currentColor}
-                          onChange={(e) => setCurrentColor(e.target.value)}
-                          className="w-8 h-8 rounded border border-gray-300 cursor-pointer"
-                        />
-                        <div className="flex space-x-1">
-                          {['#000000', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'].map(color => (
-                            <button
-                              key={color}
-                              onClick={() => setCurrentColor(color)}
-                              className={`w-6 h-6 rounded border-2 ${
-                                currentColor === color ? 'border-gray-800' : 'border-gray-300'
-                              }`}
-                              style={{ backgroundColor: color }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="h-6 w-px bg-gray-300"></div>
-
-                      {/* Brush Size */}
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm text-gray-600">Size:</span>
-                        <input
-                          type="range"
-                          min="1"
-                          max="20"
-                          value={brushSize}
-                          onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                          className="w-20"
-                        />
-                        <span className="text-sm text-gray-600 w-6">{brushSize}</span>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={clearCanvas}
-                        className="flex items-center space-x-2 px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span>Clear</span>
-                      </button>
-                      <button className="flex items-center space-x-2 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors">
-                        <Download className="w-4 h-4" />
-                        <span>Save</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Canvas */}
-                  <div className="flex-1 bg-white overflow-hidden">
-                    <canvas
-                      ref={canvasRef}
-                      width={1200}
-                      height={800}
-                      className="w-full h-full cursor-crosshair"
-                      onMouseDown={startDrawing}
-                      onMouseMove={draw}
-                      onMouseUp={stopDrawing}
-                      onMouseLeave={stopDrawing}
-                    />
-                  </div>
-                </div>
-              )}
+              ))}
             </div>
           </div>
         </div>
@@ -933,7 +730,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     );
   }
 
-  // Browse Rooms View
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -946,14 +742,14 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           <div className="flex items-center space-x-4">
             <button
               onClick={() => setShowJoinModal(true)}
-              className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              className="flex items-center space-x-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
             >
               <Hash className="w-4 h-4" />
               <span>Join by Code</span>
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center space-x-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+              className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
             >
               <Plus className="w-4 h-4" />
               <span>Create Room</span>
@@ -964,9 +760,8 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
       {/* Filters */}
       <div className="bg-white border-b border-gray-200 px-8 py-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-center space-x-4">
-            {/* Search */}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+          <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
@@ -974,39 +769,33 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                 placeholder="Search rooms..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
+                className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full lg:w-96"
               />
             </div>
-
-            {/* Subject Filter */}
+          </div>
+          <div className="flex items-center space-x-4">
             <select
               value={selectedSubject}
               onChange={(e) => setSelectedSubject(e.target.value)}
               className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="all">All Subjects</option>
-              {subjects.map(subject => (
-                <option key={subject} value={subject}>{subject}</option>
-              ))}
+              <option value="Mathematics">Mathematics</option>
+              <option value="Science">Science</option>
+              <option value="History">History</option>
+              <option value="Literature">Literature</option>
+              <option value="Computer Science">Computer Science</option>
             </select>
-
-            {/* Difficulty Filter */}
             <select
               value={selectedDifficulty}
               onChange={(e) => setSelectedDifficulty(e.target.value)}
               className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="all">All Levels</option>
-              {difficulties.map(difficulty => (
-                <option key={difficulty} value={difficulty}>
-                  {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
-                </option>
-              ))}
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
             </select>
-          </div>
-
-          <div className="text-sm text-gray-500">
-            {filteredRooms.length} rooms available
           </div>
         </div>
       </div>
@@ -1015,79 +804,75 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       <div className="p-8">
         {filteredRooms.length === 0 ? (
           <div className="text-center py-16">
-            <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Users className="w-12 h-12 text-gray-400" />
+            </div>
             <h3 className="text-xl font-bold text-gray-900 mb-2">No study rooms found</h3>
             <p className="text-gray-600 mb-6">
-              {rooms.length === 0 
-                ? "Be the first to create a study room!" 
-                : "Try adjusting your search or filters"
-              }
+              {searchQuery || selectedSubject !== 'all' || selectedDifficulty !== 'all'
+                ? 'Try adjusting your search or filters'
+                : 'Be the first to create a study room!'}
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 transition-colors"
+              className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium"
             >
               Create Study Room
             </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredRooms.map(room => (
-              <div key={room.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all duration-300">
+            {filteredRooms.map((room) => (
+              <div key={room.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all duration-300 group">
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="font-bold text-gray-900 mb-2">{room.name}</h3>
-                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">{room.description}</p>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white">
+                      {getSessionTypeIcon(room.session_type)}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
+                        {room.name}
+                      </h3>
+                      <p className="text-sm text-gray-500">by {room.creator_name}</p>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-1 ml-4">
+                  <div className="flex items-center space-x-2">
                     {room.is_public ? (
-                      <Globe className="w-4 h-4 text-green-500" title="Public Room" />
+                      <Globe className="w-4 h-4 text-green-500" />
                     ) : (
-                      <Lock className="w-4 h-4 text-gray-500" title="Private Room" />
+                      <Lock className="w-4 h-4 text-gray-400" />
                     )}
                   </div>
                 </div>
 
-                <div className="space-y-3 mb-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Subject:</span>
-                    <span className="font-medium text-gray-900">{room.subject}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Level:</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      room.difficulty === 'beginner' ? 'bg-green-100 text-green-600' :
-                      room.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-600' :
-                      'bg-red-100 text-red-600'
-                    }`}>
-                      {room.difficulty.charAt(0).toUpperCase() + room.difficulty.slice(1)}
+                <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                  {room.description || 'No description provided'}
+                </p>
+
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium text-gray-700">{room.subject}</span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(room.difficulty)}`}>
+                      {room.difficulty}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Participants:</span>
-                    <span className="font-medium text-gray-900">
-                      {room.participant_count}/{room.max_participants}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Host:</span>
-                    <span className="font-medium text-gray-900">{room.creator_name}</span>
+                  <div className="flex items-center space-x-1 text-sm text-gray-500">
+                    <Users className="w-4 h-4" />
+                    <span>{room.participant_count}/{room.max_participants}</span>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs text-gray-500">#{room.room_code}</span>
-                    <span className={`w-2 h-2 rounded-full ${
-                      room.status === 'active' ? 'bg-green-500' : 'bg-gray-400'
-                    }`}></span>
+                  <div className="flex items-center space-x-2 text-sm text-gray-500">
+                    <Clock className="w-4 h-4" />
+                    <span>{new Date(room.created_at).toLocaleDateString()}</span>
                   </div>
                   <button
                     onClick={() => joinRoom(room)}
                     disabled={room.participant_count >= room.max_participants}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Join Room
+                    {room.participant_count >= room.max_participants ? 'Full' : 'Join'}
                   </button>
                 </div>
               </div>
@@ -1096,193 +881,9 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         )}
       </div>
 
-      {/* Create Room Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Create Study Room</h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Room Name *
-                </label>
-                <input
-                  type="text"
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Enter room name..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent h-24 resize-none"
-                  placeholder="Describe what this study room is about..."
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Subject *
-                  </label>
-                  <select
-                    value={createForm.subject}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, subject: e.target.value }))}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="">Select subject</option>
-                    {subjects.map(subject => (
-                      <option key={subject} value={subject}>{subject}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Difficulty Level *
-                  </label>
-                  <select
-                    value={createForm.difficulty}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, difficulty: e.target.value }))}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    {difficulties.map(difficulty => (
-                      <option key={difficulty} value={difficulty}>
-                        {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Session Type *
-                  </label>
-                  <select
-                    value={createForm.session_type}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, session_type: e.target.value }))}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="study">Study Session</option>
-                    <option value="quiz">Quiz Practice</option>
-                    <option value="discussion">Discussion</option>
-                    <option value="presentation">Presentation</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Max Participants
-                  </label>
-                  <input
-                    type="number"
-                    min="2"
-                    max="100"
-                    value={createForm.max_participants}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, max_participants: parseInt(e.target.value) }))}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={createForm.is_public}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, is_public: e.target.checked }))}
-                    className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                  />
-                  <span className="ml-3 text-sm text-gray-700">Make this room public</span>
-                </label>
-              </div>
-
-              <div className="flex space-x-4">
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={createRoom}
-                  disabled={!createForm.name || !createForm.subject}
-                  className="flex-1 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Create Room
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Join by Code Modal */}
-      {showJoinModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-8 w-full max-w-md">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Join Room</h2>
-              <button
-                onClick={() => setShowJoinModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Room Code
-                </label>
-                <input
-                  type="text"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-mono tracking-wider"
-                  placeholder="ABCD12"
-                  maxLength={6}
-                />
-              </div>
-
-              <div className="flex space-x-4">
-                <button
-                  onClick={() => setShowJoinModal(false)}
-                  className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={joinRoomByCode}
-                  disabled={!joinCode.trim()}
-                  className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Join Room
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modals */}
+      {showCreateModal && <CreateRoomModal />}
+      {showJoinModal && <JoinRoomModal />}
     </div>
   );
 };

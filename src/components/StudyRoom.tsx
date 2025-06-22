@@ -668,9 +668,9 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
   if (currentView === 'room' && currentRoom) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
         {/* Room Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
@@ -713,12 +713,12 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        <div className="flex-1 flex">
+        <div className="flex-1 flex min-h-0">
           {/* Left Side - Whiteboard */}
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-h-0">
             {/* Whiteboard */}
             {showWhiteboard && (
-              <div className="bg-white border-b border-gray-200 p-4">
+              <div className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-4">
                     <h3 className="font-medium text-gray-900">Collaborative Whiteboard</h3>
@@ -789,17 +789,17 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           </div>
 
           {/* Right Side - Chat and Participants */}
-          <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
+          <div className="w-80 bg-white border-l border-gray-200 flex flex-col min-h-0">
             {/* Chat Area */}
-            <div className="flex-1 flex flex-col">
-              <div className="p-4 border-b border-gray-200">
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="p-4 border-b border-gray-200 flex-shrink-0">
                 <h3 className="font-medium text-gray-900">Chat</h3>
               </div>
               
-              {/* Messages Container with Fixed Height and Scroll - FIXED */}
+              {/* Messages Container with Fixed Height and Scroll - FINAL FIX */}
               <div 
                 ref={chatContainerRef}
-                className="flex-1 h-0 overflow-y-auto p-4 space-y-4"
+                className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"
               >
                 {messages.map((message) => (
                   <div key={message.id} className="flex space-x-3">
@@ -832,7 +832,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
               </div>
 
               {/* Message Input - Fixed at Bottom */}
-              <div className="p-4 border-t border-gray-200 bg-gray-50">
+              <div className="p-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
                 <div className="flex space-x-3">
                   <input
                     type="text"
@@ -854,7 +854,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             </div>
 
             {/* Participants Section */}
-            <div className="border-t border-gray-200">
+            <div className="border-t border-gray-200 flex-shrink-0">
               <div className="p-4 border-b border-gray-200">
                 <h3 className="font-medium text-gray-900">Participants ({participants.length})</h3>
               </div>

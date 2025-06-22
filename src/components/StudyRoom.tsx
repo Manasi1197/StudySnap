@@ -375,41 +375,65 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!user) return;
 
     try {
-      // Check if already a participant
-      const { data: existingParticipant } = await supabase
+      // Check if any participant record exists for this user and room (active or inactive)
+      const { data: existingParticipant, error: checkError } = await supabase
         .from('room_participants')
         .select('*')
         .eq('room_id', roomId)
         .eq('user_id', user.id)
-        .eq('is_active', true)
         .maybeSingle();
 
-      if (existingParticipant) {
-        // Already in room, just navigate to it
-        const { data: roomData } = await supabase
-          .from('study_rooms')
-          .select('*')
-          .eq('id', roomId)
-          .single();
-
-        if (roomData) {
-          setCurrentRoom(roomData);
-          setCurrentView('room');
-          await loadRoomData(roomId);
-        }
-        return;
+      if (checkError) {
+        console.error('Error checking existing participant:', checkError);
+        throw checkError;
       }
 
-      // Join the room
-      const { error } = await supabase
-        .from('room_participants')
-        .insert({
-          room_id: roomId,
-          user_id: user.id,
-          role: role
-        });
+      if (existingParticipant) {
+        if (existingParticipant.is_active) {
+          // Already active in room, just navigate to it
+          const { data: roomData } = await supabase
+            .from('study_rooms')
+            .select('*')
+            .eq('id', roomId)
+            .single();
 
-      if (error) throw error;
+          if (roomData) {
+            setCurrentRoom(roomData);
+            setCurrentView('room');
+            await loadRoomData(roomId);
+          }
+          return;
+        } else {
+          // Reactivate existing inactive participant
+          const { error: updateError } = await supabase
+            .from('room_participants')
+            .update({ 
+              is_active: true, 
+              role: role,
+              joined_at: new Date().toISOString()
+            })
+            .eq('id', existingParticipant.id);
+
+          if (updateError) {
+            console.error('Error reactivating participant:', updateError);
+            throw updateError;
+          }
+        }
+      } else {
+        // No existing record, create new participant
+        const { error: insertError } = await supabase
+          .from('room_participants')
+          .insert({
+            room_id: roomId,
+            user_id: user.id,
+            role: role
+          });
+
+        if (insertError) {
+          console.error('Error creating new participant:', insertError);
+          throw insertError;
+        }
+      }
 
       // Load room data
       const { data: roomData } = await supabase

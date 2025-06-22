@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle, XCircle, AlertCircle, Trophy, RotateCcw, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, XCircle, AlertCircle, Trophy, RotateCcw, X, Loader2 } from 'lucide-react';
+import LanguageSelector from './LanguageSelector';
+import { useTranslation } from '../hooks/useTranslation';
+import { getLanguageName } from '../lib/lingo';
 import toast from 'react-hot-toast';
 
 interface Question {
@@ -11,6 +14,10 @@ interface Question {
   explanation: string;
   difficulty: string;
   topic: string;
+  translatedQuestion?: string;
+  translatedOptions?: string[];
+  translatedExplanation?: string;
+  translatedTopic?: string;
 }
 
 interface Quiz {
@@ -43,15 +50,76 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
   const [showResults, setShowResults] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showExitConfirmation, setShowExitConfirmation] = useState(false);
+  const [translatedQuestions, setTranslatedQuestions] = useState<Question[]>(quiz.questions);
+  
+  const { 
+    isTranslating, 
+    currentLanguage, 
+    translateMultiple, 
+    setLanguage 
+  } = useTranslation('en');
 
   // Early return if quiz data is invalid
   if (!quiz || !quiz.questions || !Array.isArray(quiz.questions) || quiz.questions.length === 0) {
     return null;
   }
 
-  const currentQuestion = quiz.questions[currentQuestionIndex];
+  const currentQuestion = translatedQuestions[currentQuestionIndex];
   const totalQuestions = quiz.questions.length;
   const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
+
+  const handleLanguageChange = async (newLanguage: string) => {
+    if (newLanguage === currentLanguage) return;
+
+    setLanguage(newLanguage);
+
+    if (newLanguage === 'en') {
+      // Reset to original content
+      setTranslatedQuestions(quiz.questions);
+      return;
+    }
+
+    try {
+      // Collect all texts to translate
+      const textsToTranslate: string[] = [];
+      quiz.questions.forEach(question => {
+        textsToTranslate.push(question.question, question.explanation, question.topic);
+        if (question.options) {
+          textsToTranslate.push(...question.options);
+        }
+      });
+
+      // Translate all texts
+      const translatedTexts = await translateMultiple(textsToTranslate, newLanguage, 'en');
+
+      // Map translated texts back to questions
+      let textIndex = 0;
+      const newTranslatedQuestions = quiz.questions.map((question) => {
+        const translatedQuestion = translatedTexts[textIndex++];
+        const translatedExplanation = translatedTexts[textIndex++];
+        const translatedTopic = translatedTexts[textIndex++];
+        
+        let translatedOptions: string[] | undefined;
+        if (question.options) {
+          translatedOptions = question.options.map(() => translatedTexts[textIndex++]);
+        }
+
+        return {
+          ...question,
+          translatedQuestion,
+          translatedExplanation,
+          translatedTopic,
+          translatedOptions
+        };
+      });
+
+      setTranslatedQuestions(newTranslatedQuestions);
+    } catch (error) {
+      console.error('Failed to translate quiz:', error);
+      // Keep original questions on error
+      setTranslatedQuestions(quiz.questions);
+    }
+  };
 
   // Handle browser back button and page refresh
   useEffect(() => {
@@ -166,6 +234,11 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
 
   const cancelExit = () => {
     setShowExitConfirmation(false);
+  };
+
+  // Get display text based on current language
+  const getDisplayText = (original: string, translated?: string) => {
+    return currentLanguage === 'en' ? original : (translated || original);
   };
 
   // Exit Confirmation Modal
@@ -289,7 +362,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
               <h3 className="text-lg font-bold text-gray-900">Question Review</h3>
             </div>
             <div className="p-6 space-y-6">
-              {quiz.questions.map((question, index) => {
+              {translatedQuestions.map((question, index) => {
                 const userAnswer = answers[question.id];
                 const isCorrect = userAnswer === question.correctAnswer;
                 
@@ -305,7 +378,9 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
                             <XCircle className="w-5 h-5 text-red-500" />
                           )}
                         </div>
-                        <h4 className="font-medium text-gray-900 mb-4">{question.question}</h4>
+                        <h4 className="font-medium text-gray-900 mb-4">
+                          {getDisplayText(question.question, question.translatedQuestion)}
+                        </h4>
                       </div>
                     </div>
                     
@@ -324,7 +399,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
                       </div>
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                         <p className="text-sm text-blue-800">
-                          <strong>Explanation:</strong> {question.explanation}
+                          <strong>Explanation:</strong> {getDisplayText(question.explanation, question.translatedExplanation)}
                         </p>
                       </div>
                     </div>
@@ -360,6 +435,20 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
               <p className="text-gray-600">Question {currentQuestionIndex + 1} of {totalQuestions}</p>
             </div>
           </div>
+          <div className="flex items-center space-x-4">
+            {/* Language Selector */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600">Language:</span>
+              <LanguageSelector
+                selectedLanguage={currentLanguage}
+                onLanguageChange={handleLanguageChange}
+                className="min-w-[140px]"
+              />
+              {isTranslating && (
+                <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -367,7 +456,14 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
       <div className="bg-white border-b border-gray-200 px-8 py-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-gray-700">Progress</span>
-          <span className="text-sm font-medium text-gray-700">{Math.round(progress)}%</span>
+          <div className="flex items-center space-x-4">
+            <span className="text-sm font-medium text-gray-700">{Math.round(progress)}%</span>
+            {currentLanguage !== 'en' && (
+              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                Translated to {getLanguageName(currentLanguage)}
+              </span>
+            )}
+          </div>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div 
@@ -388,27 +484,38 @@ const QuizTaker: React.FC<QuizTakerProps> = ({ quiz, onBack, onNavigate }) => {
               <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-medium">
                 {currentQuestion.difficulty.toUpperCase()}
               </span>
+              <span className="bg-purple-100 text-purple-600 px-3 py-1 rounded-full text-xs font-medium">
+                {getDisplayText(currentQuestion.topic, currentQuestion.translatedTopic)}
+              </span>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">{currentQuestion.question}</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+              {getDisplayText(currentQuestion.question, currentQuestion.translatedQuestion)}
+            </h2>
           </div>
 
           {/* Answer Options */}
           <div className="mb-8">
             {currentQuestion.type === 'multiple-choice' && currentQuestion.options && (
               <div className="space-y-3">
-                {currentQuestion.options.map((option, index) => (
-                  <label key={index} className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="radio"
-                      name={currentQuestion.id}
-                      value={index}
-                      checked={answers[currentQuestion.id] === index}
-                      onChange={() => handleAnswerChange(index)}
-                      className="mr-4 text-blue-600"
-                    />
-                    <span className="text-gray-900">{option}</span>
-                  </label>
-                ))}
+                {currentQuestion.options.map((option, index) => {
+                  const displayOption = currentLanguage === 'en' 
+                    ? option 
+                    : (currentQuestion.translatedOptions?.[index] || option);
+                  
+                  return (
+                    <label key={index} className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="radio"
+                        name={currentQuestion.id}
+                        value={index}
+                        checked={answers[currentQuestion.id] === index}
+                        onChange={() => handleAnswerChange(index)}
+                        className="mr-4 text-blue-600"
+                      />
+                      <span className="text-gray-900">{displayOption}</span>
+                    </label>
+                  );
+                })}
               </div>
             )}
 

@@ -1,11 +1,17 @@
-import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, RotateCcw, Shuffle, BookOpen, ChevronLeft, ChevronRight, Play, Volume2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, ArrowRight, RotateCcw, Shuffle, BookOpen, ChevronLeft, ChevronRight, Play, Volume2, Loader2 } from 'lucide-react';
+import LanguageSelector from './LanguageSelector';
+import { useTranslation } from '../hooks/useTranslation';
+import { getLanguageName } from '../lib/lingo';
 
 interface Flashcard {
   id: string;
   front: string;
   back: string;
   topic: string;
+  translatedFront?: string;
+  translatedBack?: string;
+  translatedTopic?: string;
 }
 
 interface FlashcardsViewerProps {
@@ -27,11 +33,60 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
   const [isFlipped, setIsFlipped] = useState(false);
   const [shuffledCards, setShuffledCards] = useState(flashcards);
   const [studiedCards, setStudiedCards] = useState<Set<number>>(new Set());
+  const [translatedCards, setTranslatedCards] = useState<Flashcard[]>(flashcards);
+  
+  const { 
+    isTranslating, 
+    currentLanguage, 
+    translateMultiple, 
+    setLanguage 
+  } = useTranslation('en');
 
-  const currentCard = shuffledCards[currentIndex];
+  const currentCard = translatedCards[currentIndex];
+
+  useEffect(() => {
+    setTranslatedCards(shuffledCards);
+  }, [shuffledCards]);
+
+  const handleLanguageChange = async (newLanguage: string) => {
+    if (newLanguage === currentLanguage) return;
+
+    setLanguage(newLanguage);
+
+    if (newLanguage === 'en') {
+      // Reset to original content
+      setTranslatedCards(shuffledCards);
+      return;
+    }
+
+    try {
+      // Collect all texts to translate
+      const textsToTranslate: string[] = [];
+      shuffledCards.forEach(card => {
+        textsToTranslate.push(card.front, card.back, card.topic);
+      });
+
+      // Translate all texts
+      const translatedTexts = await translateMultiple(textsToTranslate, newLanguage, 'en');
+
+      // Map translated texts back to cards
+      const newTranslatedCards = shuffledCards.map((card, index) => ({
+        ...card,
+        translatedFront: translatedTexts[index * 3],
+        translatedBack: translatedTexts[index * 3 + 1],
+        translatedTopic: translatedTexts[index * 3 + 2]
+      }));
+
+      setTranslatedCards(newTranslatedCards);
+    } catch (error) {
+      console.error('Failed to translate flashcards:', error);
+      // Keep original cards on error
+      setTranslatedCards(shuffledCards);
+    }
+  };
 
   const nextCard = () => {
-    if (currentIndex < shuffledCards.length - 1) {
+    if (currentIndex < translatedCards.length - 1) {
       setCurrentIndex(currentIndex + 1);
       setIsFlipped(false);
     }
@@ -57,6 +112,11 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
     setCurrentIndex(0);
     setIsFlipped(false);
     setStudiedCards(new Set());
+    
+    // Re-translate if not in English
+    if (currentLanguage !== 'en') {
+      handleLanguageChange(currentLanguage);
+    }
   };
 
   const resetProgress = () => {
@@ -79,6 +139,11 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
 
   const progress = ((studiedCards.size) / flashcards.length) * 100;
 
+  // Get display text based on current language
+  const getDisplayText = (original: string, translated?: string) => {
+    return currentLanguage === 'en' ? original : (translated || original);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -98,10 +163,24 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
               <p className="text-gray-600">Study Flashcards</p>
             </div>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-4">
+            {/* Language Selector */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600">Language:</span>
+              <LanguageSelector
+                selectedLanguage={currentLanguage}
+                onLanguageChange={handleLanguageChange}
+                className="min-w-[140px]"
+              />
+              {isTranslating && (
+                <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+              )}
+            </div>
+            <div className="h-6 w-px bg-gray-300"></div>
             <button
               onClick={shuffleCards}
               className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              disabled={isTranslating}
             >
               <Shuffle className="w-4 h-4" />
               <span>Shuffle</span>
@@ -123,9 +202,16 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
           <span className="text-sm font-medium text-gray-700">
             Card {currentIndex + 1} of {flashcards.length}
           </span>
-          <span className="text-sm font-medium text-gray-700">
-            {studiedCards.size} studied ({Math.round(progress)}%)
-          </span>
+          <div className="flex items-center space-x-4">
+            <span className="text-sm font-medium text-gray-700">
+              {studiedCards.size} studied ({Math.round(progress)}%)
+            </span>
+            {currentLanguage !== 'en' && (
+              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                Translated to {getLanguageName(currentLanguage)}
+              </span>
+            )}
+          </div>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div 
@@ -154,7 +240,9 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
                       <BookOpen className="w-10 h-10 text-white" />
                     </div>
                     <h2 className="text-3xl font-bold mb-6">Question</h2>
-                    <p className="text-2xl leading-relaxed">{currentCard?.front}</p>
+                    <p className="text-2xl leading-relaxed">
+                      {getDisplayText(currentCard?.front, currentCard?.translatedFront)}
+                    </p>
                   </div>
                   <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
                     <p className="text-white text-opacity-80 text-lg">Click to reveal answer</p>
@@ -168,7 +256,9 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
                       <BookOpen className="w-10 h-10 text-white" />
                     </div>
                     <h2 className="text-3xl font-bold mb-6">Answer</h2>
-                    <p className="text-2xl leading-relaxed">{currentCard?.back}</p>
+                    <p className="text-2xl leading-relaxed">
+                      {getDisplayText(currentCard?.back, currentCard?.translatedBack)}
+                    </p>
                   </div>
                   <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
                     <p className="text-white text-opacity-80 text-lg">Click to flip back</p>
@@ -190,7 +280,9 @@ const FlashcardsViewer: React.FC<FlashcardsViewerProps> = ({
 
               <div className="flex items-center space-x-6 bg-white rounded-xl px-8 py-4 border border-gray-200">
                 <span className="text-lg text-gray-500">
-                  Topic: <span className="font-medium text-gray-900">{currentCard?.topic}</span>
+                  Topic: <span className="font-medium text-gray-900">
+                    {getDisplayText(currentCard?.topic, currentCard?.translatedTopic)}
+                  </span>
                 </span>
               </div>
 

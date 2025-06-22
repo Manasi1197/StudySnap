@@ -302,24 +302,30 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!user) return;
 
     try {
-      // Check if already a participant
-      const { data: existingParticipant } = await supabase
+      // Check if already a participant - use array instead of single()
+      const { data: existingParticipants, error: checkError } = await supabase
         .from('room_participants')
         .select('*')
         .eq('room_id', room.id)
         .eq('user_id', user.id)
-        .eq('is_active', true)
-        .single();
+        .eq('is_active', true);
 
-      if (!existingParticipant) {
-        // Add as participant
-        await supabase
+      if (checkError) throw checkError;
+
+      // If no existing active participant found, add as new participant
+      if (!existingParticipants || existingParticipants.length === 0) {
+        const { error: insertError } = await supabase
           .from('room_participants')
           .insert({
             room_id: room.id,
             user_id: user.id,
             role: 'participant'
           });
+
+        if (insertError) throw insertError;
+      } else {
+        // User is already an active participant, just proceed to join
+        console.log('User is already an active participant in this room');
       }
 
       setSelectedRoom(room);
@@ -428,6 +434,21 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!user || !selectedRoom || !newMessage.trim()) return;
 
     try {
+      // First verify the user is an active participant in the room
+      const { data: participantCheck, error: participantError } = await supabase
+        .from('room_participants')
+        .select('id')
+        .eq('room_id', selectedRoom.id)
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+
+      if (participantError) throw participantError;
+
+      if (!participantCheck || participantCheck.length === 0) {
+        toast.error('You must be an active participant to send messages');
+        return;
+      }
+
       const { error } = await supabase
         .from('room_messages')
         .insert({

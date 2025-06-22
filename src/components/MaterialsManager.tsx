@@ -121,6 +121,7 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
 
   // File upload handling
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    console.log('Files dropped:', acceptedFiles);
     setUploadingFiles(acceptedFiles);
     setShowUploadModal(true);
   }, []);
@@ -132,8 +133,15 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
       'text/*': ['.txt', '.md'],
       'application/pdf': ['.pdf']
     },
-    maxSize: 10 * 1024 * 1024 // 10MB
+    maxSize: 10 * 1024 * 1024, // 10MB
+    multiple: true
   });
+
+  // Handle manual file selection
+  const handleAddMaterialsClick = () => {
+    console.log('Add Materials button clicked');
+    setShowUploadModal(true);
+  };
 
   const processAndUploadFiles = async (files: File[], titles: string[]) => {
     if (!user) return;
@@ -450,27 +458,68 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
           </p>
         </div>
 
-        <div className="space-y-4 mb-8">
-          {uploadingFiles.map((file, index) => (
-            <div key={index} className="border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center space-x-3 mb-3">
-                {getFileIcon(file.type.startsWith('image/') ? 'image' : 
-                           isPDFFile(file) ? 'pdf' : 'text')}
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">{file.name}</p>
-                  <p className="text-sm text-gray-500">{formatFileSize(file.size)}</p>
+        {/* File Selection Area */}
+        {uploadingFiles.length === 0 && (
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 mb-6 ${
+              isDragActive 
+                ? 'border-blue-400 bg-blue-50' 
+                : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
+            }`}
+          >
+            <input {...getInputProps()} />
+            <div className="space-y-4">
+              <div className="flex justify-center space-x-4">
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <Image className="w-6 h-6 text-blue-600" />
+                </div>
+                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-green-600" />
                 </div>
               </div>
-              <input
-                type="text"
-                placeholder="Enter a title for this material..."
-                defaultValue={file.name.replace(/\.[^/.]+$/, "")}
-                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                id={`title-${index}`}
-              />
+              <div>
+                <p className="text-lg font-medium text-gray-900 mb-2">
+                  {isDragActive ? 'Drop files here' : 'Drag & drop your files'}
+                </p>
+                <p className="text-gray-500">
+                  Support for images, PDFs, and text files (max 10MB each)
+                </p>
+              </div>
+              <button 
+                type="button"
+                className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium"
+              >
+                Browse Files
+              </button>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
+
+        {/* Selected Files */}
+        {uploadingFiles.length > 0 && (
+          <div className="space-y-4 mb-8">
+            {uploadingFiles.map((file, index) => (
+              <div key={index} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center space-x-3 mb-3">
+                  {getFileIcon(file.type.startsWith('image/') ? 'image' : 
+                               isPDFFile(file) ? 'pdf' : 'text')}
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{file.name}</p>
+                    <p className="text-sm text-gray-500">{formatFileSize(file.size)}</p>
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Enter a title for this material..."
+                  defaultValue={file.name.replace(/\.[^/.]+$/, "")}
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  id={`title-${index}`}
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="flex space-x-4">
           <button
@@ -482,26 +531,28 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
           >
             Cancel
           </button>
-          <button
-            onClick={() => {
-              const titles = uploadingFiles.map((_, index) => {
-                const input = document.getElementById(`title-${index}`) as HTMLInputElement;
-                return input?.value || uploadingFiles[index].name;
-              });
-              processAndUploadFiles(uploadingFiles, titles);
-            }}
-            disabled={processingFiles.size > 0}
-            className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-          >
-            {processingFiles.size > 0 ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Processing...</span>
-              </>
-            ) : (
-              <span>Upload Materials</span>
-            )}
-          </button>
+          {uploadingFiles.length > 0 && (
+            <button
+              onClick={() => {
+                const titles = uploadingFiles.map((_, index) => {
+                  const input = document.getElementById(`title-${index}`) as HTMLInputElement;
+                  return input?.value || uploadingFiles[index].name;
+                });
+                processAndUploadFiles(uploadingFiles, titles);
+              }}
+              disabled={processingFiles.size > 0}
+              className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              {processingFiles.size > 0 ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                <span>Upload Materials</span>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -823,7 +874,7 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
           </div>
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => setShowUploadModal(true)}
+              onClick={handleAddMaterialsClick}
               className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
             >
               <Plus className="w-4 h-4" />
@@ -917,7 +968,10 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                 <p className="text-gray-600 mb-6 max-w-md mx-auto">
                   Upload your first study material to get started. You can upload images, PDFs, and text files.
                 </p>
-                <button className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium">
+                <button 
+                  onClick={handleAddMaterialsClick}
+                  className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium"
+                >
                   Upload Your First Material
                 </button>
               </div>

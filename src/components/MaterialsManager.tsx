@@ -18,8 +18,6 @@ import {
   List,
   Calendar,
   Tag,
-  Star,
-  StarOff,
   Copy,
   ExternalLink,
   CheckCircle,
@@ -62,7 +60,6 @@ interface StudyMaterial {
   created_at: string;
   updated_at: string;
   tags?: string[];
-  is_favorite?: boolean;
   folder?: string;
 }
 
@@ -133,7 +130,7 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
       'application/pdf': ['.pdf']
     },
     maxSize: 10 * 1024 * 1024, // 10MB
-    noClick: true, // Disable click on the dropzone itself
+    noClick: true,
     noKeyboard: true
   });
 
@@ -174,8 +171,7 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
             file_url: fileUrl || null,
             file_size: file.size,
             extracted_text: extractedText,
-            processing_status: 'completed',
-            is_favorite: false
+            processing_status: 'completed'
           });
 
         if (error) throw error;
@@ -218,32 +214,6 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
     } catch (error: any) {
       console.error('Error deleting material:', error);
       toast.error('Failed to delete material');
-    }
-  };
-
-  const toggleFavorite = async (materialId: string) => {
-    try {
-      const material = materials.find(m => m.id === materialId);
-      if (!material) return;
-
-      const newFavoriteStatus = !material.is_favorite;
-
-      const { error } = await supabase
-        .from('study_materials')
-        .update({ is_favorite: newFavoriteStatus })
-        .eq('id', materialId)
-        .eq('user_id', user?.id);
-
-      if (error) throw error;
-
-      setMaterials(prev => prev.map(m => 
-        m.id === materialId ? { ...m, is_favorite: newFavoriteStatus } : m
-      ));
-
-      toast.success(newFavoriteStatus ? 'Added to favorites' : 'Removed from favorites');
-    } catch (error: any) {
-      console.error('Error updating favorite:', error);
-      toast.error('Failed to update favorite');
     }
   };
 
@@ -703,17 +673,6 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
             
             <div className="flex items-center space-x-2">
               <button
-                onClick={() => toggleFavorite(viewingMaterial.id)}
-                className="p-2 text-gray-400 hover:text-yellow-500 transition-colors rounded-lg hover:bg-gray-100"
-                title={viewingMaterial.is_favorite ? "Remove from favorites" : "Add to favorites"}
-              >
-                {viewingMaterial.is_favorite ? (
-                  <Star className="w-5 h-5 fill-current text-yellow-500" />
-                ) : (
-                  <StarOff className="w-5 h-5" />
-                )}
-              </button>
-              <button
                 onClick={() => downloadMaterial(viewingMaterial)}
                 className="p-2 text-gray-400 hover:text-blue-500 transition-colors rounded-lg hover:bg-gray-100"
                 title="Download"
@@ -825,7 +784,7 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
           </div>
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => open()}
+              onClick={open}
               className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
             >
               <Plus className="w-4 h-4" />
@@ -919,10 +878,7 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                 <p className="text-gray-600 mb-6 max-w-md mx-auto">
                   Upload your first study material to get started. You can upload images, PDFs, and text files.
                 </p>
-                <button 
-                  onClick={() => open()}
-                  className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium"
-                >
+                <button className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium">
                   Upload Your First Material
                 </button>
               </div>
@@ -975,16 +931,6 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                         {getFileIcon(material.file_type)}
                       </div>
                       <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => toggleFavorite(material.id)}
-                          className="p-1 text-gray-400 hover:text-yellow-500 transition-colors"
-                        >
-                          {material.is_favorite ? (
-                            <Star className="w-4 h-4 fill-current text-yellow-500" />
-                          ) : (
-                            <StarOff className="w-4 h-4" />
-                          )}
-                        </button>
                         <div className="relative group/menu">
                           <button className="p-1 text-gray-400 hover:text-gray-600 transition-colors">
                             <MoreVertical className="w-4 h-4" />
@@ -1097,9 +1043,6 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                           {material.content || material.extracted_text || 'No content'}
                         </p>
                       </div>
-                      {material.is_favorite && (
-                        <Star className="w-4 h-4 text-yellow-500 fill-current flex-shrink-0" />
-                      )}
                     </div>
                     <div className="col-span-2 flex items-center">
                       <span className="text-sm text-gray-600 capitalize">{material.file_type}</span>
@@ -1111,17 +1054,6 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                       <span className="text-sm text-gray-600">{formatDate(material.created_at)}</span>
                     </div>
                     <div className="col-span-1 flex items-center justify-end space-x-2">
-                      <button
-                        onClick={() => toggleFavorite(material.id)}
-                        className="p-1 text-gray-400 hover:text-yellow-500 transition-colors"
-                        title={material.is_favorite ? "Remove from favorites" : "Add to favorites"}
-                      >
-                        {material.is_favorite ? (
-                          <Star className="w-4 h-4 fill-current text-yellow-500" />
-                        ) : (
-                          <StarOff className="w-4 h-4" />
-                        )}
-                      </button>
                       <button
                         onClick={() => viewMaterial(material)}
                         className="p-1 text-gray-400 hover:text-blue-500 transition-colors"

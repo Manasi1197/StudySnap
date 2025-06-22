@@ -28,7 +28,8 @@ import {
   Brain,
   Trash2,
   Eye,
-  EyeOff
+  EyeOff,
+  Hash
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -84,7 +85,7 @@ interface StudyRoomProps {
 
 const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'browse' | 'create' | 'room'>('browse');
+  const [currentView, setCurrentView] = useState<'browse' | 'create' | 'room' | 'join'>('browse');
   const [studyRooms, setStudyRooms] = useState<StudyRoom[]>([]);
   const [currentRoom, setCurrentRoom] = useState<StudyRoom | null>(null);
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
@@ -94,9 +95,11 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showJoinForm, setShowJoinForm] = useState(false);
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [newMessage, setNewMessage] = useState('');
+  const [joinCode, setJoinCode] = useState('');
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentTool, setCurrentTool] = useState<'pen' | 'eraser'>('pen');
   const [currentColor, setCurrentColor] = useState('#000000');
@@ -106,6 +109,14 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Available subjects for dropdown
+  const availableSubjects = [
+    'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Computer Science',
+    'History', 'Geography', 'Literature', 'Economics', 'Psychology',
+    'Philosophy', 'Art', 'Music', 'Languages', 'Engineering', 'Medicine'
+  ];
 
   // Form state with proper controlled inputs
   const [formData, setFormData] = useState({
@@ -115,7 +126,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     difficulty: 'beginner' as 'beginner' | 'intermediate' | 'advanced',
     maxParticipants: 10,
     isPublic: true,
-    sessionType: 'study' as 'study' | 'quiz' | 'discussion' | 'presentation',
     tags: [] as string[],
     scheduledFor: ''
   });
@@ -145,7 +155,13 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     context.lineJoin = 'round';
     context.strokeStyle = currentColor;
     context.lineWidth = brushSize;
-    context.globalCompositeOperation = currentTool === 'eraser' ? 'destination-out' : 'source-over';
+    
+    // Set composite operation based on tool
+    if (currentTool === 'eraser') {
+      context.globalCompositeOperation = 'destination-out';
+    } else {
+      context.globalCompositeOperation = 'source-over';
+    }
 
     contextRef.current = context;
   }, [currentColor, brushSize, currentTool]);
@@ -190,14 +206,20 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     setIsDrawing(false);
   }, [isDrawing]);
 
-  // Update canvas tool settings
+  // Update canvas tool settings when tool changes
   useEffect(() => {
     const context = contextRef.current;
     if (!context) return;
 
     context.strokeStyle = currentColor;
     context.lineWidth = brushSize;
-    context.globalCompositeOperation = currentTool === 'eraser' ? 'destination-out' : 'source-over';
+    
+    // Update composite operation for eraser
+    if (currentTool === 'eraser') {
+      context.globalCompositeOperation = 'destination-out';
+    } else {
+      context.globalCompositeOperation = 'source-over';
+    }
   }, [currentColor, brushSize, currentTool]);
 
   // Clear canvas
@@ -275,7 +297,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           max_participants: formData.maxParticipants,
           is_public: formData.isPublic,
           created_by: user.id,
-          session_type: formData.sessionType,
+          session_type: 'study', // Default to study since we removed the dropdown
           tags: formData.tags,
           room_code: roomCode,
           scheduled_for: formData.scheduledFor || null
@@ -299,7 +321,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         difficulty: 'beginner',
         maxParticipants: 10,
         isPublic: true,
-        sessionType: 'study',
         tags: [],
         scheduledFor: ''
       });
@@ -308,6 +329,42 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     } catch (error: any) {
       console.error('Error creating study room:', error);
       toast.error('Failed to create study room');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Join room by code
+  const joinRoomByCode = async () => {
+    if (!user || !joinCode.trim()) {
+      toast.error('Please enter a room code');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Find room by code
+      const { data: roomData, error: roomError } = await supabase
+        .from('study_rooms')
+        .select('*')
+        .eq('room_code', joinCode.trim().toUpperCase())
+        .eq('status', 'active')
+        .single();
+
+      if (roomError || !roomData) {
+        toast.error('Room not found or inactive');
+        return;
+      }
+
+      // Join the room
+      await joinRoom(roomData.id);
+      setShowJoinForm(false);
+      setJoinCode('');
+      
+    } catch (error: any) {
+      console.error('Error joining room by code:', error);
+      toast.error('Failed to join room');
     } finally {
       setLoading(false);
     }
@@ -477,9 +534,20 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     }
   };
 
-  // Scroll to bottom of messages
+  // Resource sharing functions
+  const shareQuiz = () => {
+    toast.info('Quiz sharing feature coming soon!');
+  };
+
+  const shareMaterial = () => {
+    toast.info('Material sharing feature coming soon!');
+  };
+
+  // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
   }, [messages]);
 
   // Filter rooms
@@ -674,19 +742,19 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             <div className="p-4 border-b border-gray-200">
               <h4 className="font-medium text-gray-900 mb-3">Share Resources</h4>
               <div className="space-y-2">
-                <button className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left">
+                <button 
+                  onClick={shareMaterial}
+                  className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                >
                   <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
                     <FileText className="w-4 h-4 text-white" />
                   </div>
-                  <span className="text-sm font-medium text-gray-900">Share Document</span>
+                  <span className="text-sm font-medium text-gray-900">Share Materials</span>
                 </button>
-                <button className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left">
-                  <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-                    <BookOpen className="w-4 h-4 text-white" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-900">Share Flashcards</span>
-                </button>
-                <button className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left">
+                <button 
+                  onClick={shareQuiz}
+                  className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                >
                   <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
                     <Brain className="w-4 h-4 text-white" />
                   </div>
@@ -696,13 +764,16 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             </div>
 
             {/* Chat */}
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col min-h-0">
               <div className="p-4 border-b border-gray-200">
                 <h4 className="font-medium text-gray-900">Chat</h4>
               </div>
               
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {/* Messages - Fixed height with scroll */}
+              <div 
+                ref={chatContainerRef}
+                className="flex-1 overflow-y-auto p-4 space-y-3 max-h-80"
+              >
                 {messages.map((message) => (
                   <div key={message.id} className="flex space-x-3">
                     <div className="w-8 h-8 bg-gray-500 rounded-full flex items-center justify-center flex-shrink-0">
@@ -719,7 +790,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                           {new Date(message.created_at).toLocaleTimeString()}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-700 mt-1">{message.message}</p>
+                      <p className="text-sm text-gray-700 mt-1 break-words">{message.message}</p>
                     </div>
                   </div>
                 ))}
@@ -862,6 +933,13 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           </div>
           <div className="flex items-center space-x-4">
             <button
+              onClick={() => setShowJoinForm(true)}
+              className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
+            >
+              <Hash className="w-4 h-4" />
+              <span>Join by Code</span>
+            </button>
+            <button
               onClick={() => setShowCreateForm(true)}
               className="flex items-center space-x-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-medium"
             >
@@ -981,6 +1059,60 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         )}
       </div>
 
+      {/* Join Room Modal */}
+      {showJoinForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-md relative">
+            <button
+              onClick={() => setShowJoinForm(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Hash className="w-8 h-8 text-blue-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Join Study Room</h2>
+              <p className="text-gray-600">Enter the room code to join an existing study session</p>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Room Code
+                </label>
+                <input
+                  type="text"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-center text-lg"
+                  placeholder="Enter 6-digit code"
+                  maxLength={6}
+                />
+              </div>
+
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => setShowJoinForm(false)}
+                  className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={joinRoomByCode}
+                  disabled={loading || !joinCode.trim()}
+                  className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Joining...' : 'Join Room'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create Room Modal */}
       {showCreateForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1019,13 +1151,15 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Subject *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.subject}
                     onChange={(e) => handleInputChange('subject', e.target.value)}
                     className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="e.g., Mathematics, Physics"
-                  />
+                  >
+                    {availableSubjects.map(subject => (
+                      <option key={subject} value={subject}>{subject}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -1042,7 +1176,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Difficulty Level
@@ -1055,22 +1189,6 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                     <option value="beginner">Beginner</option>
                     <option value="intermediate">Intermediate</option>
                     <option value="advanced">Advanced</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Session Type
-                  </label>
-                  <select
-                    value={formData.sessionType}
-                    onChange={(e) => handleInputChange('sessionType', e.target.value)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="study">Study Session</option>
-                    <option value="quiz">Quiz Practice</option>
-                    <option value="discussion">Discussion</option>
-                    <option value="presentation">Presentation</option>
                   </select>
                 </div>
 

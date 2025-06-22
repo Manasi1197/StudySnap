@@ -25,7 +25,9 @@ import {
   ChevronDown,
   X,
   Edit3,
-  Eraser
+  Eraser,
+  Eye,
+  Play
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -111,7 +113,7 @@ interface StudyMaterial {
 
 const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'rooms' | 'room'>('rooms');
+  const [currentView, setCurrentView] = useState<'rooms' | 'room' | 'quiz-view' | 'material-view'>('rooms');
   const [selectedRoom, setSelectedRoom] = useState<StudyRoom | null>(null);
   const [rooms, setRooms] = useState<StudyRoom[]>([]);
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
@@ -124,6 +126,8 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [userQuizzes, setUserQuizzes] = useState<Quiz[]>([]);
   const [userMaterials, setUserMaterials] = useState<StudyMaterial[]>([]);
   const [selectedResourceId, setSelectedResourceId] = useState('');
+  const [viewingQuiz, setViewingQuiz] = useState<Quiz | null>(null);
+  const [viewingMaterial, setViewingMaterial] = useState<StudyMaterial | null>(null);
   
   // Whiteboard state - with pencil and eraser
   const [isDrawing, setIsDrawing] = useState(false);
@@ -148,9 +152,15 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
   // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    const scrollToBottom = () => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+    
+    // Small delay to ensure DOM is updated
+    const timeoutId = setTimeout(scrollToBottom, 100);
+    return () => clearTimeout(timeoutId);
   }, [messages]);
 
   // Load rooms on component mount
@@ -166,12 +176,25 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (selectedRoom && user) {
       loadRoomData();
       
-      // Set up real-time subscriptions
-      const messagesSubscription = supabase
+      // Set up real-time subscriptions with better error handling
+      const messagesChannel = supabase
         .channel(`room-messages-${selectedRoom.id}`)
         .on('postgres_changes', 
           { 
-            event: '*', 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'room_messages',
+            filter: `room_id=eq.${selectedRoom.id}`
+          }, 
+          (payload) => {
+            console.log('New message received:', payload);
+            // Immediately add the new message to state
+            loadMessages(); // Reload all messages to get profile data
+          }
+        )
+        .on('postgres_changes', 
+          { 
+            event: 'UPDATE', 
             schema: 'public', 
             table: 'room_messages',
             filter: `room_id=eq.${selectedRoom.id}`
@@ -180,9 +203,11 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             loadMessages();
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Messages subscription status:', status);
+        });
 
-      const participantsSubscription = supabase
+      const participantsChannel = supabase
         .channel(`room-participants-${selectedRoom.id}`)
         .on('postgres_changes', 
           { 
@@ -191,15 +216,19 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             table: 'room_participants',
             filter: `room_id=eq.${selectedRoom.id}`
           }, 
-          () => {
+          (payload) => {
+            console.log('Participants change:', payload);
             loadParticipants();
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Participants subscription status:', status);
+        });
 
       return () => {
-        supabase.removeChannel(messagesSubscription);
-        supabase.removeChannel(participantsSubscription);
+        console.log('Cleaning up subscriptions');
+        supabase.removeChannel(messagesChannel);
+        supabase.removeChannel(participantsChannel);
       };
     }
   }, [selectedRoom, user]);
@@ -300,6 +329,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
+      console.log('Loaded messages:', data?.length);
       setMessages(data || []);
     } catch (error: any) {
       console.error('Error loading messages:', error);
@@ -391,6 +421,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!newMessage.trim() || !selectedRoom || !user) return;
 
     try {
+      console.log('Sending message:', newMessage);
       const { error } = await supabase
         .from('room_messages')
         .insert({
@@ -402,6 +433,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
       if (error) throw error;
       setNewMessage('');
+      console.log('Message sent successfully');
     } catch (error: any) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
@@ -456,34 +488,60 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   };
 
   const handleResourceClick = async (messageType: string, message: string) => {
-    if (!onNavigate) return;
-
     // Parse the message to get title and ID
     const [resourceTitle, resourceId] = message.split('|');
     
     if (messageType === 'quiz_share') {
-      // Find the quiz by ID and navigate to quiz generator with the quiz data
+      // Find the quiz by ID and show it in the study room
       const quiz = userQuizzes.find(q => q.id === resourceId);
       if (quiz) {
-        // Store quiz data for the quiz generator
-        localStorage.setItem('shared_quiz_data', JSON.stringify(quiz));
-        localStorage.setItem('quiz_generator_mode', 'view_shared');
-        onNavigate('quiz-generator');
+        setViewingQuiz(quiz);
+        setCurrentView('quiz-view');
         toast.success(`Opening shared quiz: ${resourceTitle}`);
       } else {
-        toast.error('Quiz not found');
+        // Try to fetch the quiz from database if not in user's list
+        try {
+          const { data, error } = await supabase
+            .from('quizzes')
+            .select('*')
+            .eq('id', resourceId)
+            .single();
+          
+          if (error) throw error;
+          if (data) {
+            setViewingQuiz(data);
+            setCurrentView('quiz-view');
+            toast.success(`Opening shared quiz: ${resourceTitle}`);
+          }
+        } catch (error) {
+          toast.error('Quiz not found or access denied');
+        }
       }
     } else if (messageType === 'file') {
-      // Find the material by ID and navigate to materials with the material highlighted
+      // Find the material by ID and show it in the study room
       const material = userMaterials.find(m => m.id === resourceId);
       if (material) {
-        // Store material data for the materials manager
-        localStorage.setItem('shared_material_data', JSON.stringify(material));
-        localStorage.setItem('materials_highlight_id', material.id);
-        onNavigate('materials');
+        setViewingMaterial(material);
+        setCurrentView('material-view');
         toast.success(`Opening shared material: ${resourceTitle}`);
       } else {
-        toast.error('Material not found');
+        // Try to fetch the material from database if not in user's list
+        try {
+          const { data, error } = await supabase
+            .from('study_materials')
+            .select('*')
+            .eq('id', resourceId)
+            .single();
+          
+          if (error) throw error;
+          if (data) {
+            setViewingMaterial(data);
+            setCurrentView('material-view');
+            toast.success(`Opening shared material: ${resourceTitle}`);
+          }
+        } catch (error) {
+          toast.error('Material not found or access denied');
+        }
       }
     }
   };
@@ -493,6 +551,8 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     setCurrentView('rooms');
     setMessages([]);
     setParticipants([]);
+    setViewingQuiz(null);
+    setViewingMaterial(null);
   };
 
   const copyRoomCode = () => {
@@ -560,6 +620,140 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
+  // Quiz View Component
+  const QuizView = ({ quiz }: { quiz: Quiz }) => (
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center justify-between mb-8">
+          <button
+            onClick={() => setCurrentView('room')}
+            className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <ArrowRight className="w-4 h-4 rotate-180" />
+            <span>Back to Room</span>
+          </button>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => {
+                if (onNavigate) {
+                  localStorage.setItem('shared_quiz_data', JSON.stringify(quiz));
+                  onNavigate('quiz-generator');
+                }
+              }}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              <Play className="w-4 h-4" />
+              <span>Take Quiz</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">{quiz.title}</h1>
+          <p className="text-gray-600 mb-8">{quiz.description}</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-blue-50 rounded-lg p-4">
+              <h3 className="font-medium text-blue-900 mb-2">Questions</h3>
+              <p className="text-2xl font-bold text-blue-600">{quiz.questions.length}</p>
+            </div>
+            <div className="bg-green-50 rounded-lg p-4">
+              <h3 className="font-medium text-green-900 mb-2">Flashcards</h3>
+              <p className="text-2xl font-bold text-green-600">{quiz.flashcards.length}</p>
+            </div>
+            <div className="bg-purple-50 rounded-lg p-4">
+              <h3 className="font-medium text-purple-900 mb-2">Created</h3>
+              <p className="text-sm font-medium text-purple-600">
+                {new Date(quiz.created_at).toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <h2 className="text-xl font-bold text-gray-900">Questions Preview</h2>
+            {quiz.questions.slice(0, 3).map((question, index) => (
+              <div key={index} className="border border-gray-200 rounded-lg p-4">
+                <h3 className="font-medium text-gray-900 mb-2">
+                  Question {index + 1}: {question.question}
+                </h3>
+                {question.options && (
+                  <ul className="space-y-1 text-sm text-gray-600">
+                    {question.options.map((option: string, optIndex: number) => (
+                      <li key={optIndex} className="flex items-center space-x-2">
+                        <span className="w-4 h-4 border border-gray-300 rounded-full flex-shrink-0"></span>
+                        <span>{option}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+            {quiz.questions.length > 3 && (
+              <p className="text-gray-500 text-center">
+                And {quiz.questions.length - 3} more questions...
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Material View Component
+  const MaterialView = ({ material }: { material: StudyMaterial }) => (
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center justify-between mb-8">
+          <button
+            onClick={() => setCurrentView('room')}
+            className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <ArrowRight className="w-4 h-4 rotate-180" />
+            <span>Back to Room</span>
+          </button>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => {
+                if (onNavigate) {
+                  localStorage.setItem('shared_material_data', JSON.stringify(material));
+                  onNavigate('materials');
+                }
+              }}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              <Eye className="w-4 h-4" />
+              <span>View in Materials</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-8">
+          <div className="flex items-center space-x-4 mb-6">
+            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+              material.file_type === 'image' ? 'bg-blue-100' :
+              material.file_type === 'pdf' ? 'bg-red-100' : 'bg-green-100'
+            }`}>
+              <FileText className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">{material.title}</h1>
+              <p className="text-gray-600 capitalize">{material.file_type} • {new Date(material.created_at).toLocaleDateString()}</p>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Content</h2>
+            <div className="prose prose-gray max-w-none">
+              <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+                {material.content || 'No content available'}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -569,6 +763,16 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         </div>
       </div>
     );
+  }
+
+  // Show quiz view
+  if (currentView === 'quiz-view' && viewingQuiz) {
+    return <QuizView quiz={viewingQuiz} />;
+  }
+
+  // Show material view
+  if (currentView === 'material-view' && viewingMaterial) {
+    return <MaterialView material={viewingMaterial} />;
   }
 
   if (currentView === 'rooms') {

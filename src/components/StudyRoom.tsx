@@ -796,11 +796,10 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                 <h3 className="font-medium text-gray-900">Chat</h3>
               </div>
               
-              {/* Messages Container with Fixed Height and Scroll */}
+              {/* Messages Container with Fixed Height and Scroll - FIXED */}
               <div 
                 ref={chatContainerRef}
-                className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[400px]"
-                style={{ minHeight: '300px' }}
+                className="flex-1 h-0 overflow-y-auto p-4 space-y-4"
               >
                 {messages.map((message) => (
                   <div key={message.id} className="flex space-x-3">

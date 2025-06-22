@@ -296,13 +296,17 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
       if (error) throw error;
 
-      // Add creator as host participant
+      // Add creator as host participant using upsert to avoid duplicate key errors
       await supabase
         .from('room_participants')
-        .insert({
+        .upsert({
           room_id: room.id,
           user_id: user.id,
-          role: 'host'
+          role: 'host',
+          is_active: true,
+          joined_at: new Date().toISOString()
+        }, {
+          onConflict: 'room_id,user_id'
         });
 
       toast.success('Study room created successfully!');
@@ -329,13 +333,18 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!user) return;
 
     try {
-      // Check if user is already a participant
-      const { data: existingParticipant } = await supabase
+      // Check if user is already a participant - handle the case where no rows are returned
+      const { data: existingParticipant, error: participantError } = await supabase
         .from('room_participants')
         .select('*')
         .eq('room_id', room.id)
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle(); // Use maybeSingle() instead of single() to handle zero rows gracefully
+
+      // Handle the error only if it's not a "no rows found" error
+      if (participantError && participantError.code !== 'PGRST116') {
+        throw participantError;
+      }
 
       if (existingParticipant) {
         if (existingParticipant.is_active) {
@@ -352,13 +361,17 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             .eq('id', existingParticipant.id);
         }
       } else {
-        // Add new participant
+        // Add new participant using upsert to avoid duplicate key errors
         await supabase
           .from('room_participants')
-          .insert({
+          .upsert({
             room_id: room.id,
             user_id: user.id,
-            role: 'participant'
+            role: 'participant',
+            is_active: true,
+            joined_at: new Date().toISOString()
+          }, {
+            onConflict: 'room_id,user_id'
           });
       }
 
@@ -381,9 +394,13 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         .select('*')
         .eq('room_code', joinCode.toUpperCase())
         .eq('status', 'active')
-        .single();
+        .maybeSingle(); // Use maybeSingle() to handle zero rows gracefully
 
-      if (error || !room) {
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      if (!room) {
         toast.error('Invalid room code');
         return;
       }
@@ -477,19 +494,25 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
           let contentTitle = 'Unknown Resource';
           
           if (resource.content_type === 'quiz' && resource.content_id) {
-            const { data: quiz } = await supabase
+            const { data: quiz, error: quizError } = await supabase
               .from('quizzes')
               .select('title')
               .eq('id', resource.content_id)
-              .single();
-            contentTitle = quiz?.title || 'Quiz';
+              .maybeSingle(); // Use maybeSingle() to handle zero rows gracefully
+            
+            if (!quizError || quizError.code === 'PGRST116') {
+              contentTitle = quiz?.title || 'Quiz';
+            }
           } else if (resource.content_type === 'study_material' && resource.content_id) {
-            const { data: material } = await supabase
+            const { data: material, error: materialError } = await supabase
               .from('study_materials')
               .select('title')
               .eq('id', resource.content_id)
-              .single();
-            contentTitle = material?.title || 'Study Material';
+              .maybeSingle(); // Use maybeSingle() to handle zero rows gracefully
+            
+            if (!materialError || materialError.code === 'PGRST116') {
+              contentTitle = material?.title || 'Study Material';
+            }
           }
 
           return {

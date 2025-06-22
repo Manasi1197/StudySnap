@@ -41,6 +41,7 @@ import MaterialsManager from './MaterialsManager';
 import AchievementsManager from './AchievementsManager';
 import SettingsManager from './SettingsManager';
 import HelpCenter from './HelpCenter';
+import MarketplaceManager from './MarketplaceManager';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 
@@ -55,6 +56,31 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
   const [subPageData, setSubPageData] = React.useState<any>(null);
   const [quizGeneratorState, setQuizGeneratorState] = React.useState<any>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [userProfile, setUserProfile] = React.useState<any>(null);
+
+  // Listen for profile updates
+  React.useEffect(() => {
+    const handleProfileUpdate = (event: any) => {
+      setUserProfile(event.detail);
+    };
+
+    window.addEventListener('profileUpdated', handleProfileUpdate);
+    return () => window.removeEventListener('profileUpdated', handleProfileUpdate);
+  }, []);
+
+  // Get display name for user
+  const getDisplayName = () => {
+    if (userProfile?.full_name) return userProfile.full_name;
+    if (user?.user_metadata?.full_name) return user.user_metadata.full_name;
+    if (user?.email) return user.email.split('@')[0];
+    return 'Student';
+  };
+
+  // Get avatar URL
+  const getAvatarUrl = () => {
+    if (userProfile?.avatar_url) return userProfile.avatar_url;
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(getDisplayName())}&size=128&background=6366f1&color=ffffff`;
+  };
 
   const handleSignOut = async () => {
     try {
@@ -296,12 +322,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
       case 'help':
         return <HelpCenter onNavigate={handleNavigation} />;
       case 'marketplace':
-        return (
-          <div className="text-center pt-20">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Marketplace</h1>
-            <p className="text-xl text-gray-600">Monetize your study materials - feature in development!</p>
-          </div>
-        );
+        return <MarketplaceManager onNavigate={handleNavigation} />;
       default:
         return (
           <div className="space-y-6 sm:space-y-8">
@@ -539,7 +560,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
                 </button>
                 <div>
                   <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                    Welcome back, {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student'}! 👋
+                    Welcome back, {getDisplayName()}! 👋
                   </h1>
                 </div>
               </div>
@@ -553,13 +574,13 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
                 </button>
                 <div className="hidden sm:flex items-center space-x-3">
                   <img
-                    src="https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop"
+                    src={getAvatarUrl()}
                     alt="Profile"
                     className="w-8 h-8 rounded-full"
                   />
                   <div className="text-sm">
                     <div className="font-medium text-gray-900">
-                      {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student'}
+                      {getDisplayName()}
                     </div>
                     <div className="text-gray-500">Basic Member</div>
                   </div>
@@ -570,10 +591,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         )}
 
         {/* Dashboard Content */}
-        <main className={`flex-1 ${!isInSubPage && currentPage !== 'quiz-generator' && currentPage !== 'study-rooms' && currentPage !== 'materials' && currentPage !== 'achievements' && currentPage !== 'settings' && currentPage !== 'help' ? 'p-4 sm:p-8' : ''}`}>
+        <main className={`flex-1 ${!isInSubPage && currentPage !== 'quiz-generator' && currentPage !== 'study-rooms' && currentPage !== 'materials' && currentPage !== 'achievements' && currentPage !== 'settings' && currentPage !== 'help' && currentPage !== 'marketplace' ? 'p-4 sm:p-8' : ''}`}>
           {/* Conditional container width based on current page */}
-          {currentPage === 'quiz-generator' || isInSubPage || currentPage === 'study-rooms' || currentPage === 'materials' || currentPage === 'achievements' || currentPage === 'settings' || currentPage === 'help' ? (
-            // Full width for Quiz Generator, sub-pages, Study Rooms, Materials, Achievements, Settings, and Help
+          {currentPage === 'quiz-generator' || isInSubPage || currentPage === 'study-rooms' || currentPage === 'materials' || currentPage === 'achievements' || currentPage === 'settings' || currentPage === 'help' || currentPage === 'marketplace' ? (
+            // Full width for Quiz Generator, sub-pages, Study Rooms, Materials, Achievements, Settings, Help, and Marketplace
             <div className="w-full">
               {renderMainContent()}
             </div>
@@ -599,12 +620,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
                       </div>
                       <div className="text-center mb-6">
                         <img
-                          src="https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop"
+                          src={getAvatarUrl()}
                           alt="Profile"
                           className="w-16 h-16 rounded-full mx-auto mb-4"
                         />
                         <h4 className="font-bold text-gray-900">
-                          {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student'}
+                          {getDisplayName()}
                         </h4>
                         <p className="text-sm text-gray-500">Basic Member</p>
                       </div>

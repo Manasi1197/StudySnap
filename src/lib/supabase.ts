@@ -32,18 +32,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     params: {
       eventsPerSecond: 10
     }
-  },
-  global: {
-    fetch: (url, options = {}) => {
-      return fetch(url, {
-        ...options,
-        // Add timeout to prevent hanging requests
-        signal: AbortSignal.timeout(10000)
-      }).catch(error => {
-        console.error('Supabase fetch error:', error);
-        throw error;
-      });
-    }
   }
 });
 
@@ -66,9 +54,6 @@ export const testSupabaseConnection = async () => {
     connectionTested = true;
   }
 };
-
-// Don't test connection immediately - let components handle it
-// testSupabaseConnection();
 
 // Database types
 export interface User {

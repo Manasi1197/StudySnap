@@ -34,7 +34,10 @@ export function useTranslation(defaultLanguage: string = 'en') {
       const errorMessage = error.message || 'Translation failed';
       setState(prev => ({ ...prev, isTranslating: false, error: errorMessage }));
       console.error('Translation error:', error);
-      toast.error(`Translation failed: ${errorMessage}`);
+      // Don't show error toast for fallback translations
+      if (error.message && !error.message.includes('mock')) {
+        toast.error(`Translation failed: ${errorMessage}`);
+      }
       return text; // Return original text on error
     }
   }, []);
@@ -51,14 +54,30 @@ export function useTranslation(defaultLanguage: string = 'en') {
     setState(prev => ({ ...prev, isTranslating: true, error: null }));
 
     try {
+      console.log('🔄 Starting batch translation...', { 
+        textCount: texts.length, 
+        targetLanguage, 
+        sourceLanguage 
+      });
+
       const results = await translateBatch(texts, targetLanguage, sourceLanguage);
+      
       setState(prev => ({ ...prev, isTranslating: false, currentLanguage: targetLanguage }));
-      return results.map(result => result.translatedText);
+      
+      const translatedTexts = results.map(result => result.translatedText);
+      console.log('✅ Batch translation completed successfully');
+      
+      return translatedTexts;
     } catch (error: any) {
       const errorMessage = error.message || 'Batch translation failed';
       setState(prev => ({ ...prev, isTranslating: false, error: errorMessage }));
       console.error('Batch translation error:', error);
-      toast.error(`Translation failed: ${errorMessage}`);
+      
+      // Don't show error toast for fallback translations
+      if (error.message && !error.message.includes('mock')) {
+        toast.error(`Translation failed: ${errorMessage}`);
+      }
+      
       return texts; // Return original texts on error
     }
   }, []);

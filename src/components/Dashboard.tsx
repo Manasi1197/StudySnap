@@ -28,7 +28,19 @@ import {
   CheckCircle,
   Circle,
   LogOut,
-  ShoppingBag
+  ShoppingBag,
+  X,
+  Filter,
+  SortAsc,
+  User,
+  Calendar,
+  Bookmark,
+  Trash2,
+  Archive,
+  Mail,
+  Phone,
+  Globe,
+  ExternalLink
 } from 'lucide-react';
 import QuizGenerator from './QuizGenerator';
 import AudioPlayer from './AudioPlayer';
@@ -48,12 +60,131 @@ interface DashboardProps {
   onNavigate?: (page: string) => void;
 }
 
+interface Notification {
+  id: string;
+  type: 'achievement' | 'reminder' | 'social' | 'system' | 'quiz';
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+  icon: string;
+  action?: () => void;
+}
+
+interface SearchResult {
+  id: string;
+  type: 'quiz' | 'material' | 'room' | 'achievement' | 'user';
+  title: string;
+  description: string;
+  category: string;
+  action: () => void;
+}
+
 const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavigate }) => {
   const { user, signOut } = useAuth();
   const [currentSubPage, setCurrentSubPage] = React.useState<string | null>(null);
   const [subPageData, setSubPageData] = React.useState<any>(null);
   const [quizGeneratorState, setQuizGeneratorState] = React.useState<any>(null);
   const [userProfile, setUserProfile] = React.useState<any>(null);
+  const [showSearchModal, setShowSearchModal] = React.useState(false);
+  const [showNotifications, setShowNotifications] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchResults, setSearchResults] = React.useState<SearchResult[]>([]);
+  const [notifications, setNotifications] = React.useState<Notification[]>([
+    {
+      id: '1',
+      type: 'achievement',
+      title: 'Achievement Unlocked!',
+      message: 'You earned the "Quiz Master" badge for completing 10 quizzes',
+      time: '2 minutes ago',
+      read: false,
+      icon: '🏆',
+      action: () => handleNavigation('achievements')
+    },
+    {
+      id: '2',
+      type: 'reminder',
+      title: 'Study Reminder',
+      message: 'Time for your daily study session! You have 3 pending quizzes.',
+      time: '1 hour ago',
+      read: false,
+      icon: '📚',
+      action: () => handleNavigation('quiz-generator')
+    },
+    {
+      id: '3',
+      type: 'social',
+      title: 'New Study Room',
+      message: 'Sarah invited you to join "Biology Study Group"',
+      time: '3 hours ago',
+      read: true,
+      icon: '👥',
+      action: () => handleNavigation('study-rooms')
+    },
+    {
+      id: '4',
+      type: 'quiz',
+      title: 'Quiz Completed',
+      message: 'Great job! You scored 85% on "Chemistry Basics"',
+      time: '1 day ago',
+      read: true,
+      icon: '✅'
+    },
+    {
+      id: '5',
+      type: 'system',
+      title: 'New Feature Available',
+      message: 'AI Audio generation is now available for all your quizzes!',
+      time: '2 days ago',
+      read: true,
+      icon: '🎵',
+      action: () => handleNavigation('quiz-generator')
+    }
+  ]);
+
+  // Mock search data
+  const mockSearchData: SearchResult[] = [
+    {
+      id: '1',
+      type: 'quiz',
+      title: 'Biology Fundamentals',
+      description: 'Complete quiz on cellular biology and genetics',
+      category: 'Science',
+      action: () => handleNavigation('quiz-generator')
+    },
+    {
+      id: '2',
+      type: 'material',
+      title: 'Chemistry Notes',
+      description: 'Organic chemistry study materials and formulas',
+      category: 'Science',
+      action: () => handleNavigation('materials')
+    },
+    {
+      id: '3',
+      type: 'room',
+      title: 'Math Study Group',
+      description: 'Collaborative calculus problem solving',
+      category: 'Mathematics',
+      action: () => handleNavigation('study-rooms')
+    },
+    {
+      id: '4',
+      type: 'achievement',
+      title: 'Study Streak Master',
+      description: 'Maintain a 30-day study streak',
+      category: 'Achievement',
+      action: () => handleNavigation('achievements')
+    },
+    {
+      id: '5',
+      type: 'quiz',
+      title: 'History Timeline',
+      description: 'World War II events and dates quiz',
+      category: 'History',
+      action: () => handleNavigation('quiz-generator')
+    }
+  ];
 
   // Listen for profile updates
   React.useEffect(() => {
@@ -83,6 +214,93 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
   };
 
   const displayInfo = getUserDisplayInfo();
+
+  // Search functionality
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    
+    if (query.trim() === '') {
+      setSearchResults([]);
+      return;
+    }
+
+    // Filter mock data based on search query
+    const filtered = mockSearchData.filter(item =>
+      item.title.toLowerCase().includes(query.toLowerCase()) ||
+      item.description.toLowerCase().includes(query.toLowerCase()) ||
+      item.category.toLowerCase().includes(query.toLowerCase())
+    );
+
+    setSearchResults(filtered);
+  };
+
+  const handleSearchSelect = (result: SearchResult) => {
+    result.action();
+    setShowSearchModal(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    toast.success(`Opening ${result.title}`);
+  };
+
+  // Notification functionality
+  const markNotificationAsRead = (notificationId: string) => {
+    setNotifications(prev => 
+      prev.map(notif => 
+        notif.id === notificationId ? { ...notif, read: true } : notif
+      )
+    );
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setNotifications(prev => 
+      prev.map(notif => ({ ...notif, read: true }))
+    );
+  };
+
+  const deleteNotification = (notificationId: string) => {
+    setNotifications(prev => 
+      prev.filter(notif => notif.id !== notificationId)
+    );
+  };
+
+  const clearAllNotifications = () => {
+    setNotifications([]);
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'achievement': return Trophy;
+      case 'reminder': return Clock;
+      case 'social': return Users;
+      case 'quiz': return Brain;
+      case 'system': return Settings;
+      default: return Bell;
+    }
+  };
+
+  const getNotificationColor = (type: string) => {
+    switch (type) {
+      case 'achievement': return 'text-yellow-600 bg-yellow-100';
+      case 'reminder': return 'text-blue-600 bg-blue-100';
+      case 'social': return 'text-green-600 bg-green-100';
+      case 'quiz': return 'text-purple-600 bg-purple-100';
+      case 'system': return 'text-gray-600 bg-gray-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getSearchIcon = (type: string) => {
+    switch (type) {
+      case 'quiz': return Brain;
+      case 'material': return FileText;
+      case 'room': return Users;
+      case 'achievement': return Trophy;
+      case 'user': return User;
+      default: return Search;
+    }
+  };
 
   const handleSignOut = async () => {
     try {
@@ -454,6 +672,196 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
   // Check if we're in a sub-page that should hide the sidebar
   const isInSubPage = currentPage === 'quiz-generator' && currentSubPage;
 
+  // Search Modal Component
+  const SearchModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 pt-20">
+      <div className="bg-white rounded-2xl w-full max-w-2xl mx-4 shadow-2xl">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center space-x-4">
+            <Search className="w-6 h-6 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search quizzes, materials, rooms, achievements..."
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="flex-1 text-lg border-none outline-none"
+              autoFocus
+            />
+            <button
+              onClick={() => {
+                setShowSearchModal(false);
+                setSearchQuery('');
+                setSearchResults([]);
+              }}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-96 overflow-y-auto">
+          {searchQuery === '' ? (
+            <div className="p-8 text-center">
+              <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Search StudySnap</h3>
+              <p className="text-gray-600">Find quizzes, study materials, rooms, and more</p>
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div className="p-8 text-center">
+              <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No results found</h3>
+              <p className="text-gray-600">Try searching for something else</p>
+            </div>
+          ) : (
+            <div className="p-4">
+              <div className="text-sm text-gray-500 mb-4">
+                {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"
+              </div>
+              <div className="space-y-2">
+                {searchResults.map((result) => {
+                  const Icon = getSearchIcon(result.type);
+                  return (
+                    <button
+                      key={result.id}
+                      onClick={() => handleSearchSelect(result)}
+                      className="w-full flex items-center space-x-4 p-4 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                    >
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <Icon className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-900 truncate">{result.title}</h4>
+                        <p className="text-sm text-gray-600 truncate">{result.description}</p>
+                      </div>
+                      <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                        {result.category}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Notifications Dropdown Component
+  const NotificationsDropdown = () => (
+    <div className="absolute right-0 top-12 w-96 bg-white rounded-xl shadow-2xl border border-gray-200 z-50">
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
+          <div className="flex items-center space-x-2">
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllNotificationsAsRead}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Mark all read
+              </button>
+            )}
+            <button
+              onClick={() => setShowNotifications(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-h-96 overflow-y-auto">
+        {notifications.length === 0 ? (
+          <div className="p-8 text-center">
+            <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h4 className="text-lg font-semibold text-gray-900 mb-2">No notifications</h4>
+            <p className="text-gray-600">You're all caught up!</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {notifications.map((notification) => {
+              const Icon = getNotificationIcon(notification.type);
+              return (
+                <div
+                  key={notification.id}
+                  className={`p-4 hover:bg-gray-50 transition-colors ${
+                    !notification.read ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  <div className="flex items-start space-x-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getNotificationColor(notification.type)}`}>
+                      <span className="text-lg">{notification.icon}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h4 className={`font-medium ${!notification.read ? 'text-gray-900' : 'text-gray-700'}`}>
+                          {notification.title}
+                        </h4>
+                        <div className="flex items-center space-x-2">
+                          {!notification.read && (
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          )}
+                          <button
+                            onClick={() => deleteNotification(notification.id)}
+                            className="text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      <p className={`text-sm mt-1 ${!notification.read ? 'text-gray-700' : 'text-gray-600'}`}>
+                        {notification.message}
+                      </p>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs text-gray-500">{notification.time}</span>
+                        <div className="flex items-center space-x-2">
+                          {notification.action && (
+                            <button
+                              onClick={() => {
+                                notification.action!();
+                                markNotificationAsRead(notification.id);
+                                setShowNotifications(false);
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                            >
+                              View
+                            </button>
+                          )}
+                          {!notification.read && (
+                            <button
+                              onClick={() => markNotificationAsRead(notification.id)}
+                              className="text-xs text-gray-500 hover:text-gray-700"
+                            >
+                              Mark read
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {notifications.length > 0 && (
+        <div className="p-4 border-t border-gray-200">
+          <button
+            onClick={clearAllNotifications}
+            className="w-full text-center text-sm text-red-600 hover:text-red-700 font-medium"
+          >
+            Clear all notifications
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar - Hide only for Quiz Generator sub-pages */}
@@ -538,13 +946,33 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
                 </h1>
               </div>
               <div className="flex items-center space-x-4">
-                <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                {/* Search Button */}
+                <button 
+                  onClick={() => setShowSearchModal(true)}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+                  title="Search"
+                >
                   <Search className="w-5 h-5" />
                 </button>
-                <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors relative">
-                  <Bell className="w-5 h-5" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                </button>
+                
+                {/* Notifications Button */}
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors relative rounded-lg hover:bg-gray-100"
+                    title="Notifications"
+                  >
+                    <Bell className="w-5 h-5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </button>
+                  {showNotifications && <NotificationsDropdown />}
+                </div>
+                
+                {/* Profile */}
                 <div className="flex items-center space-x-3">
                   <img
                     src={displayInfo.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayInfo.name)}&size=32&background=6366f1&color=ffffff`}
@@ -685,6 +1113,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
           )}
         </main>
       </div>
+
+      {/* Search Modal */}
+      {showSearchModal && <SearchModal />}
     </div>
   );
 };

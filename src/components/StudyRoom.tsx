@@ -245,6 +245,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         return;
       }
 
+      console.log('Loading rooms...');
       const { data, error } = await supabase
         .from('study_rooms')
         .select('*')
@@ -252,19 +253,25 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Supabase error:', error);
-        toast.error('Failed to load study rooms');
+        console.error('Supabase error loading rooms:', error);
+        toast.error(`Failed to load study rooms: ${error.message}`);
         return;
       }
       
+      console.log('Rooms loaded successfully:', data?.length);
       setRooms(data || []);
     } catch (error: any) {
       console.error('Error loading rooms:', error);
-      // Check if it's a network error
+      
+      // Provide more specific error messages
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        toast.error('Network connection error. Please check your internet connection.');
+        toast.error('Network connection error. Please check your internet connection and Supabase configuration.');
+      } else if (error.message?.includes('Invalid API key')) {
+        toast.error('Invalid Supabase API key. Please check your environment variables.');
+      } else if (error.message?.includes('Project not found')) {
+        toast.error('Supabase project not found. Please check your project URL.');
       } else {
-        toast.error('Failed to load study rooms');
+        toast.error(`Failed to load study rooms: ${error.message || 'Unknown error'}`);
       }
     } finally {
       setLoading(false);
@@ -272,9 +279,14 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   };
 
   const loadUserResources = async () => {
-    if (!user) return;
+    if (!user) {
+      console.log('No user found, skipping resource loading');
+      return;
+    }
 
     try {
+      console.log('Loading user resources for user:', user.id);
+      
       // Check if supabase client is properly initialized
       if (!supabase) {
         console.error('Supabase client not initialized');
@@ -283,6 +295,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
       // Load user's quizzes with better error handling
       try {
+        console.log('Loading quizzes...');
         const { data: quizzes, error: quizzesError } = await supabase
           .from('quizzes')
           .select('id, title, description, questions, flashcards, created_at')
@@ -291,16 +304,23 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
         if (quizzesError) {
           console.error('Error loading quizzes:', quizzesError);
+          toast.error(`Failed to load quizzes: ${quizzesError.message}`);
         } else {
+          console.log('Quizzes loaded successfully:', quizzes?.length);
           setUserQuizzes(quizzes || []);
         }
       } catch (quizError: any) {
         console.error('Network error loading quizzes:', quizError);
-        // Don't show error toast for individual resource loading failures
+        if (quizError.name === 'TypeError' && quizError.message.includes('fetch')) {
+          toast.error('Network error loading quizzes. Please check your connection.');
+        } else {
+          toast.error(`Error loading quizzes: ${quizError.message}`);
+        }
       }
 
       // Load user's materials with better error handling
       try {
+        console.log('Loading materials...');
         const { data: materials, error: materialsError } = await supabase
           .from('study_materials')
           .select('id, title, content, file_type, created_at')
@@ -309,19 +329,30 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
         if (materialsError) {
           console.error('Error loading materials:', materialsError);
+          toast.error(`Failed to load materials: ${materialsError.message}`);
         } else {
+          console.log('Materials loaded successfully:', materials?.length);
           setUserMaterials(materials || []);
         }
       } catch (materialError: any) {
         console.error('Network error loading materials:', materialError);
-        // Don't show error toast for individual resource loading failures
+        if (materialError.name === 'TypeError' && materialError.message.includes('fetch')) {
+          toast.error('Network error loading materials. Please check your connection.');
+        } else {
+          toast.error(`Error loading materials: ${materialError.message}`);
+        }
       }
 
     } catch (error: any) {
       console.error('Error loading user resources:', error);
-      // Only show error if it's a critical network issue
+      
+      // Provide specific error messages based on error type
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        console.warn('Network connection issue while loading resources');
+        toast.error('Network connection issue. Please check your internet connection and Supabase configuration.');
+      } else if (error.message?.includes('JWT')) {
+        toast.error('Authentication error. Please try logging out and back in.');
+      } else {
+        toast.error(`Failed to load resources: ${error.message || 'Unknown error'}`);
       }
     }
   };
@@ -355,6 +386,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       setParticipants(data || []);
     } catch (error: any) {
       console.error('Error loading participants:', error);
+      toast.error(`Failed to load participants: ${error.message}`);
     }
   };
 
@@ -379,6 +411,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       setMessages(data || []);
     } catch (error: any) {
       console.error('Error loading messages:', error);
+      toast.error(`Failed to load messages: ${error.message}`);
     }
   };
 
@@ -426,7 +459,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       setCurrentView('room');
     } catch (error: any) {
       console.error('Error creating room:', error);
-      toast.error('Failed to create study room');
+      toast.error(`Failed to create study room: ${error.message}`);
     }
   };
 
@@ -459,7 +492,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       toast.success(`Joined ${room.name}!`);
     } catch (error: any) {
       console.error('Error joining room:', error);
-      toast.error('Failed to join room');
+      toast.error(`Failed to join room: ${error.message}`);
     }
   };
 
@@ -482,7 +515,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       console.log('Message sent successfully');
     } catch (error: any) {
       console.error('Error sending message:', error);
-      toast.error('Failed to send message');
+      toast.error(`Failed to send message: ${error.message}`);
     }
   };
 
@@ -532,7 +565,7 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       setSelectedResourceId('');
     } catch (error: any) {
       console.error('Error sharing resource:', error);
-      toast.error('Failed to share resource');
+      toast.error(`Failed to share resource: ${error.message}`);
     }
   };
 
@@ -562,8 +595,8 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             setCurrentView('quiz-view');
             toast.success(`Opening shared quiz: ${resourceTitle}`);
           }
-        } catch (error) {
-          toast.error('Quiz not found or access denied');
+        } catch (error: any) {
+          toast.error(`Quiz not found or access denied: ${error.message}`);
         }
       }
     } else if (messageType === 'file') {
@@ -588,8 +621,8 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
             setCurrentView('material-view');
             toast.success(`Opening shared material: ${resourceTitle}`);
           }
-        } catch (error) {
-          toast.error('Material not found or access denied');
+        } catch (error: any) {
+          toast.error(`Material not found or access denied: ${error.message}`);
         }
       }
     }

@@ -125,14 +125,16 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
     setShowUploadModal(true);
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: {
       'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.bmp'],
       'text/*': ['.txt', '.md'],
       'application/pdf': ['.pdf']
     },
-    maxSize: 10 * 1024 * 1024 // 10MB
+    maxSize: 10 * 1024 * 1024, // 10MB
+    noClick: true, // Disable click on the dropzone itself
+    noKeyboard: true
   });
 
   const processAndUploadFiles = async (files: File[], titles: string[]) => {
@@ -823,7 +825,7 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
           </div>
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => setShowUploadModal(true)}
+              onClick={() => open()}
               className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
             >
               <Plus className="w-4 h-4" />
@@ -917,7 +919,10 @@ const MaterialsManager: React.FC<MaterialsManagerProps> = ({ onNavigate }) => {
                 <p className="text-gray-600 mb-6 max-w-md mx-auto">
                   Upload your first study material to get started. You can upload images, PDFs, and text files.
                 </p>
-                <button className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium">
+                <button 
+                  onClick={() => open()}
+                  className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium"
+                >
                   Upload Your First Material
                 </button>
               </div>

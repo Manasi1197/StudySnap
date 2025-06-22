@@ -39,6 +39,8 @@ import StudyRoom from './StudyRoom';
 import MaterialsManager from './MaterialsManager';
 import AchievementsManager from './AchievementsManager';
 import MarketplaceManager from './MarketplaceManager';
+import SettingsManager from './SettingsManager';
+import HelpCenter from './HelpCenter';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 
@@ -290,17 +292,14 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
       case 'marketplace':
         return <MarketplaceManager onNavigate={handleNavigation} />;
       case 'settings':
-        return (
-          <div className="text-center pt-20">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Settings</h1>
-            <p className="text-xl text-gray-600">Customize your learning experience - coming soon!</p>
-          </div>
-        );
+        return <SettingsManager onNavigate={handleNavigation} />;
       case 'help':
+        return <HelpCenter onNavigate={handleNavigation} />;
+      case 'dark-mode':
         return (
           <div className="text-center pt-20">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Help Center</h1>
-            <p className="text-xl text-gray-600">Get support and learn how to use StudySnap - coming soon!</p>
+            <h1 className="text-4xl font-bold text-gray-900 mb-4">Dark Mode</h1>
+            <p className="text-xl text-gray-600">Dark mode theme - coming soon!</p>
           </div>
         );
       default:
@@ -544,10 +543,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         )}
 
         {/* Dashboard Content */}
-        <main className={`flex-1 ${!isInSubPage && currentPage !== 'quiz-generator' && currentPage !== 'study-rooms' && currentPage !== 'materials' && currentPage !== 'achievements' && currentPage !== 'marketplace' ? 'p-8' : ''}`}>
+        <main className={`flex-1 ${!isInSubPage && currentPage !== 'quiz-generator' && currentPage !== 'study-rooms' && currentPage !== 'materials' && currentPage !== 'achievements' && currentPage !== 'marketplace' && currentPage !== 'settings' && currentPage !== 'help' ? 'p-8' : ''}`}>
           {/* Conditional container width based on current page */}
-          {currentPage === 'quiz-generator' || isInSubPage || currentPage === 'study-rooms' || currentPage === 'materials' || currentPage === 'achievements' || currentPage === 'marketplace' ? (
-            // Full width for Quiz Generator, sub-pages, Study Rooms, Materials, Achievements, and Marketplace
+          {currentPage === 'quiz-generator' || isInSubPage || currentPage === 'study-rooms' || currentPage === 'materials' || currentPage === 'achievements' || currentPage === 'marketplace' || currentPage === 'settings' || currentPage === 'help' ? (
+            // Full width for Quiz Generator, sub-pages, Study Rooms, Materials, Achievements, Marketplace, Settings, and Help
             <div className="w-full">
               {renderMainContent()}
             </div>

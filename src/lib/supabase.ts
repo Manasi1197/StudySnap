@@ -32,26 +32,81 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     params: {
       eventsPerSecond: 10
     }
+  },
+  global: {
+    fetch: (url, options = {}) => {
+      return fetch(url, {
+        ...options,
+        // Add timeout and retry logic
+        signal: AbortSignal.timeout(10000), // 10 second timeout
+      }).catch(error => {
+        console.error('Supabase fetch error:', error);
+        // Return a more descriptive error
+        throw new Error(`Network error: Unable to connect to Supabase. Please check your internet connection and try again.`);
+      });
+    }
   }
 });
 
-// Test connection with proper error handling
+// Enhanced connection test with retry logic
 let connectionTested = false;
 
-export const testSupabaseConnection = async () => {
-  if (connectionTested) return;
+export const testSupabaseConnection = async (retries = 3) => {
+  if (connectionTested) return true;
   
-  try {
-    const { error } = await supabase.from('profiles').select('count', { count: 'exact', head: true });
-    if (error) {
-      console.error('Supabase connection test failed:', error);
-    } else {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`Testing Supabase connection (attempt ${attempt}/${retries})...`);
+      
+      const { error } = await supabase.from('profiles').select('count', { count: 'exact', head: true });
+      
+      if (error) {
+        console.error(`Supabase connection test failed (attempt ${attempt}):`, error);
+        if (attempt === retries) {
+          throw error;
+        }
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        continue;
+      }
+      
       console.log('Supabase connection successful');
+      connectionTested = true;
+      return true;
+    } catch (error) {
+      console.error(`Supabase connection error (attempt ${attempt}):`, error);
+      if (attempt === retries) {
+        connectionTested = false;
+        return false;
+      }
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
     }
+  }
+  
+  return false;
+};
+
+// Helper function to handle Supabase queries with error handling
+export const safeSupabaseQuery = async (queryFn: () => Promise<any>, fallbackValue: any = null) => {
+  try {
+    const result = await queryFn();
+    return result;
   } catch (error) {
-    console.error('Supabase connection error:', error);
-  } finally {
-    connectionTested = true;
+    console.error('Supabase query error:', error);
+    
+    // Check if it's a network error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Unable to connect to the database. Please check your internet connection and try again.');
+    }
+    
+    // Check if it's a Supabase-specific error
+    if (error && typeof error === 'object' && 'message' in error) {
+      throw new Error(`Database error: ${error.message}`);
+    }
+    
+    // Generic error
+    throw new Error('An unexpected error occurred while accessing the database.');
   }
 };
 

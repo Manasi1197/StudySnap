@@ -40,7 +40,11 @@ import {
   Mail,
   Phone,
   Globe,
-  ExternalLink
+  ExternalLink,
+  AlertCircle,
+  RefreshCw,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import QuizGenerator from './QuizGenerator';
 import AudioPlayer from './AudioPlayer';
@@ -53,7 +57,7 @@ import MarketplaceManager from './MarketplaceManager';
 import SettingsManager from './SettingsManager';
 import HelpCenter from './HelpCenter';
 import { useAuth } from '../hooks/useAuth';
-import { supabase } from '../lib/supabase';
+import { supabase, safeSupabaseQuery, testSupabaseConnection } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
 interface DashboardProps {
@@ -119,6 +123,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchResults, setSearchResults] = React.useState<SearchResult[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [connectionError, setConnectionError] = React.useState<string | null>(null);
+  const [isRetrying, setIsRetrying] = React.useState(false);
   const [notifications, setNotifications] = React.useState<Notification[]>([
     {
       id: '1',
@@ -171,7 +177,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     }
   ]);
 
-  // Load real-time data
+  // Load real-time data with enhanced error handling
   React.useEffect(() => {
     if (user) {
       loadUserData();
@@ -196,59 +202,105 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
 
     try {
       setLoading(true);
+      setConnectionError(null);
 
-      // Load user profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      // Test connection first
+      const connectionOk = await testSupabaseConnection();
+      if (!connectionOk) {
+        throw new Error('Unable to connect to the database. Please check your internet connection.');
+      }
+
+      // Load user profile with error handling
+      const profileData = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" which is ok
+          throw error;
+        }
+        return data;
+      });
 
       if (profileData) {
         setUserProfile(profileData);
       }
 
-      // Load user progress
-      const { data: progressData } = await supabase
-        .from('user_progress')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+      // Load user progress with error handling
+      const progressData = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('user_progress')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (error && error.code !== 'PGRST116') {
+          throw error;
+        }
+        return data;
+      });
 
-      // Load quiz count
-      const { count: quizCount } = await supabase
-        .from('quizzes')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
+      // Load quiz count with error handling
+      const quizCount = await safeSupabaseQuery(async () => {
+        const { count, error } = await supabase
+          .from('quizzes')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id);
+        
+        if (error) throw error;
+        return count;
+      }, 0);
 
-      // Load study sessions
-      const { data: sessionsData } = await supabase
-        .from('study_sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('completed_at', { ascending: false });
+      // Load study sessions with error handling
+      const sessionsData = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('study_sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('completed_at', { ascending: false });
+        
+        if (error) throw error;
+        return data;
+      }, []);
 
-      // Load materials count
-      const { count: materialsCount } = await supabase
-        .from('study_materials')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
+      // Load materials count with error handling
+      const materialsCount = await safeSupabaseQuery(async () => {
+        const { count, error } = await supabase
+          .from('study_materials')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id);
+        
+        if (error) throw error;
+        return count;
+      }, 0);
 
-      // Load recent quizzes for activity
-      const { data: recentQuizzes } = await supabase
-        .from('quizzes')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(5);
+      // Load recent quizzes for activity with error handling
+      const recentQuizzes = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('quizzes')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        if (error) throw error;
+        return data;
+      }, []);
 
-      // Load recent materials for activity
-      const { data: recentMaterials } = await supabase
-        .from('study_materials')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(3);
+      // Load recent materials for activity with error handling
+      const recentMaterials = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('study_materials')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(3);
+        
+        if (error) throw error;
+        return data;
+      }, []);
 
       // Calculate stats
       const totalSessions = sessionsData?.length || 0;
@@ -330,8 +382,23 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
 
     } catch (error) {
       console.error('Error loading user data:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load user data';
+      setConnectionError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const retryConnection = async () => {
+    setIsRetrying(true);
+    try {
+      await loadUserData();
+      toast.success('Connection restored!');
+    } catch (error) {
+      toast.error('Still unable to connect. Please try again.');
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -351,7 +418,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
 
   const displayInfo = getUserDisplayInfo();
 
-  // Search functionality
+  // Search functionality with error handling
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
     
@@ -363,13 +430,18 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     try {
       const results: SearchResult[] = [];
 
-      // Search quizzes
-      const { data: quizzes } = await supabase
-        .from('quizzes')
-        .select('id, title, description')
-        .eq('user_id', user?.id)
-        .ilike('title', `%${query}%`)
-        .limit(3);
+      // Search quizzes with error handling
+      const quizzes = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('quizzes')
+          .select('id, title, description')
+          .eq('user_id', user?.id)
+          .ilike('title', `%${query}%`)
+          .limit(3);
+        
+        if (error) throw error;
+        return data;
+      }, []);
 
       quizzes?.forEach(quiz => {
         results.push({
@@ -382,13 +454,18 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         });
       });
 
-      // Search materials
-      const { data: materials } = await supabase
-        .from('study_materials')
-        .select('id, title, file_type')
-        .eq('user_id', user?.id)
-        .ilike('title', `%${query}%`)
-        .limit(3);
+      // Search materials with error handling
+      const materials = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('study_materials')
+          .select('id, title, file_type')
+          .eq('user_id', user?.id)
+          .ilike('title', `%${query}%`)
+          .limit(3);
+        
+        if (error) throw error;
+        return data;
+      }, []);
 
       materials?.forEach(material => {
         results.push({
@@ -401,12 +478,17 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
         });
       });
 
-      // Search study rooms
-      const { data: rooms } = await supabase
-        .from('study_rooms')
-        .select('id, name, description, subject')
-        .ilike('name', `%${query}%`)
-        .limit(3);
+      // Search study rooms with error handling
+      const rooms = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('study_rooms')
+          .select('id, name, description, subject')
+          .ilike('name', `%${query}%`)
+          .limit(3);
+        
+        if (error) throw error;
+        return data;
+      }, []);
 
       rooms?.forEach(room => {
         results.push({
@@ -423,6 +505,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     } catch (error) {
       console.error('Search error:', error);
       setSearchResults([]);
+      toast.error('Search temporarily unavailable');
     }
   };
 
@@ -598,6 +681,33 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
     }
   };
 
+  // Connection Error Component
+  const ConnectionError = () => (
+    <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
+      <div className="flex items-center space-x-3 mb-4">
+        <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+          <WifiOff className="w-5 h-5 text-red-600" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-red-900">Connection Error</h3>
+          <p className="text-red-700">{connectionError}</p>
+        </div>
+      </div>
+      <button
+        onClick={retryConnection}
+        disabled={isRetrying}
+        className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isRetrying ? (
+          <RefreshCw className="w-4 h-4 animate-spin" />
+        ) : (
+          <RefreshCw className="w-4 h-4" />
+        )}
+        <span>{isRetrying ? 'Retrying...' : 'Retry Connection'}</span>
+      </button>
+    </div>
+  );
+
   const renderMainContent = () => {
     // Handle sub-pages for quiz generator
     if (currentPage === 'quiz-generator') {
@@ -660,6 +770,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
       default:
         return (
           <div className="space-y-8">
+            {/* Connection Error Banner */}
+            {connectionError && <ConnectionError />}
+
             {/* Real-time Stats Cards */}
             <div className="grid md:grid-cols-3 gap-6">
               <div className="bg-white rounded-xl p-6 border border-gray-200">
@@ -1100,6 +1213,21 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavi
                 )}
               </div>
               <div className="flex items-center space-x-4">
+                {/* Connection Status Indicator */}
+                <div className="flex items-center space-x-2">
+                  {connectionError ? (
+                    <div className="flex items-center space-x-1 text-red-600">
+                      <WifiOff className="w-4 h-4" />
+                      <span className="text-xs">Offline</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-1 text-green-600">
+                      <Wifi className="w-4 h-4" />
+                      <span className="text-xs">Online</span>
+                    </div>
+                  )}
+                </div>
+
                 {/* Search Button */}
                 <button 
                   onClick={() => setShowSearchModal(true)}

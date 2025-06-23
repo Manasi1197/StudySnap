@@ -258,6 +258,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onAuthAction }) => {
         </div>
       </section>
 
+      {/* Powered by Bolt Logo */}
+      <a
+        href="https://bolt.new/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-4 right-4 w-16 h-16 z-50 shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 rounded-full overflow-hidden"
+        title="Powered by Bolt"
+      >
+        <img
+          src="https://bolt.new/logo/black_circle_360x360.png"
+          alt="Powered by Bolt"
+          className="w-full h-full object-cover"
+        />
+      </a>
+
       {/* Custom CSS for additional animations */}
       <style jsx>{`
         @keyframes float {

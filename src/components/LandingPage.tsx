@@ -267,7 +267,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onAuthAction }) => {
         title="Powered by Bolt"
       >
         <img
-          src="https://drive.google.com/file/d/1NUs4zAKlQGbmIohbEwd-LNOpxu0waMAZ/view?usp=drive_link"
+          src="https://postimg.cc/TpMfFm34"
           alt="Powered by Bolt"
           className="w-full h-full object-cover"
         />

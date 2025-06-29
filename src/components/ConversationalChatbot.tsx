@@ -99,7 +99,7 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
     if (signedUrl && !conversationRef) {
       // Dynamically import and initialize the conversation
       import('@elevenlabs/react').then((module) => {
-        const { Conversation } = module;
+        const Conversation = module.default;
         if (Conversation) {
           setConversationRef(Conversation);
         } else {

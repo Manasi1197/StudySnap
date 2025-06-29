@@ -1,90 +1,197 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { 
-  BookOpen, 
+  Brain, 
   Users, 
   Trophy, 
-  ShoppingBag, 
-  User, 
-  Bookmark, 
-  FileText, 
-  Award, 
-  Calendar, 
-  MessageSquare, 
-  Settings, 
-  HelpCircle, 
-  LogOut,
-  Plus,
-  TrendingUp,
+  TrendingUp, 
+  Camera, 
+  MessageSquare,
+  DollarSign,
+  Star,
   Clock,
+  BookOpen,
   Target,
   Zap,
-  Brain,
-  Star,
-  BarChart3,
-  PlusCircle,
   ArrowRight,
-  ChevronRight,
-  Activity,
-  Lightbulb,
-  GraduationCap
+  Sparkles,
+  Home,
+  GraduationCap,
+  FileText,
+  Award,
+  Folder,
+  HelpCircle,
+  Settings,
+  Search,
+  Bell,
+  MoreHorizontal,
+  Play,
+  CheckCircle,
+  Circle,
+  LogOut,
+  ShoppingBag,
+  X,
+  Filter,
+  SortAsc,
+  User,
+  Calendar,
+  Bookmark,
+  Trash2,
+  Archive,
+  Mail,
+  Phone,
+  Globe,
+  ExternalLink,
+  AlertCircle,
+  RefreshCw,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
 import QuizGenerator from './QuizGenerator';
+import AudioPlayer from './AudioPlayer';
+import FlashcardsViewer from './FlashcardsViewer';
+import QuizTaker from './QuizTaker';
 import StudyRoom from './StudyRoom';
-import MarketplaceManager from './MarketplaceManager';
 import MaterialsManager from './MaterialsManager';
 import AchievementsManager from './AchievementsManager';
+import MarketplaceManager from './MarketplaceManager';
 import SettingsManager from './SettingsManager';
 import HelpCenter from './HelpCenter';
-import StudyAssistantChatbot from './StudyAssistantChatbot';
-import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
+import { supabase, safeSupabaseQuery, testSupabaseConnection } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
 interface DashboardProps {
-  currentPage: string;
-  onNavigate: (page: string) => void;
+  currentPage?: string;
+  onNavigate?: (page: string) => void;
+}
+
+interface Notification {
+  id: string;
+  type: 'achievement' | 'reminder' | 'social' | 'system' | 'quiz';
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+  icon: string;
+  action?: () => void;
+}
+
+interface SearchResult {
+  id: string;
+  type: 'quiz' | 'material' | 'room' | 'achievement' | 'user';
+  title: string;
+  description: string;
+  category: string;
+  action: () => void;
 }
 
 interface UserStats {
   totalQuizzes: number;
   totalStudySessions: number;
+  totalMaterials: number;
+  totalTimeStudied: number;
   currentStreak: number;
+  longestStreak: number;
+  totalAchievements: number;
   totalPoints: number;
   level: number;
-  recentActivity: any[];
+  averageScore: number;
 }
 
-interface QuickAction {
+interface RecentActivity {
   id: string;
+  type: 'quiz' | 'material' | 'session' | 'achievement';
   title: string;
   description: string;
-  icon: React.ComponentType<any>;
+  timestamp: string;
+  progress?: number;
+  status: 'completed' | 'in-progress' | 'new';
+  icon: string;
   color: string;
-  action: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ currentPage, onNavigate }) => {
+const Dashboard: React.FC<DashboardProps> = ({ currentPage = 'dashboard', onNavigate }) => {
   const { user, signOut } = useAuth();
-  const [userStats, setUserStats] = useState<UserStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
+  const [currentSubPage, setCurrentSubPage] = React.useState<string | null>(null);
+  const [subPageData, setSubPageData] = React.useState<any>(null);
+  const [quizGeneratorState, setQuizGeneratorState] = React.useState<any>(null);
+  const [userProfile, setUserProfile] = React.useState<any>(null);
+  const [userStats, setUserStats] = React.useState<UserStats | null>(null);
+  const [recentActivity, setRecentActivity] = React.useState<RecentActivity[]>([]);
+  const [showSearchModal, setShowSearchModal] = React.useState(false);
+  const [showNotifications, setShowNotifications] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchResults, setSearchResults] = React.useState<SearchResult[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [connectionError, setConnectionError] = React.useState<string | null>(null);
+  const [isRetrying, setIsRetrying] = React.useState(false);
+  const [notifications, setNotifications] = React.useState<Notification[]>([
+    {
+      id: '1',
+      type: 'achievement',
+      title: 'Achievement Unlocked!',
+      message: 'You earned the "Quiz Master" badge for completing 10 quizzes',
+      time: '2 minutes ago',
+      read: false,
+      icon: '🏆',
+      action: () => handleNavigation('achievements')
+    },
+    {
+      id: '2',
+      type: 'reminder',
+      title: 'Study Reminder',
+      message: 'Time for your daily study session! You have 3 pending quizzes.',
+      time: '1 hour ago',
+      read: false,
+      icon: '📚',
+      action: () => handleNavigation('quiz-generator')
+    },
+    {
+      id: '3',
+      type: 'social',
+      title: 'New Study Room',
+      message: 'Sarah invited you to join "Biology Study Group"',
+      time: '3 hours ago',
+      read: true,
+      icon: '👥',
+      action: () => handleNavigation('study-rooms')
+    },
+    {
+      id: '4',
+      type: 'quiz',
+      title: 'Quiz Completed',
+      message: 'Great job! You scored 85% on "Chemistry Basics"',
+      time: '1 day ago',
+      read: true,
+      icon: '✅'
+    },
+    {
+      id: '5',
+      type: 'system',
+      title: 'New Feature Available',
+      message: 'AI Audio generation is now available for all your quizzes!',
+      time: '2 days ago',
+      read: true,
+      icon: '🎵',
+      action: () => handleNavigation('quiz-generator')
+    }
+  ]);
 
-  // Agent ID for the conversational AI chatbot
-  const STUDY_ASSISTANT_AGENT_ID = 'agent_01jyxvmbyeetd9tpgp3sep36t8';
-
-  useEffect(() => {
+  // Load real-time data with enhanced error handling
+  React.useEffect(() => {
     if (user) {
       loadUserData();
     }
   }, [user]);
 
   // Listen for profile updates
-  useEffect(() => {
+  React.useEffect(() => {
     const handleProfileUpdate = (event: CustomEvent) => {
-      setProfile(event.detail);
+      setUserProfile(event.detail);
     };
 
     window.addEventListener('profileUpdated', handleProfileUpdate as EventListener);
+    
     return () => {
       window.removeEventListener('profileUpdated', handleProfileUpdate as EventListener);
     };
@@ -95,402 +202,1212 @@ const Dashboard: React.FC<DashboardProps> = ({ currentPage, onNavigate }) => {
 
     try {
       setLoading(true);
+      setConnectionError(null);
 
-      // Load user profile
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError && profileError.code !== 'PGRST116') {
-        throw profileError;
+      // Test connection first
+      const connectionOk = await testSupabaseConnection();
+      if (!connectionOk) {
+        throw new Error('Unable to connect to the database. Please check your internet connection.');
       }
 
-      setProfile(profileData);
+      // Load user profile with error handling
+      const profileData = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" which is ok
+          throw error;
+        }
+        return data;
+      });
 
-      // Load user progress
-      const { data: progressData, error: progressError } = await supabase
-        .from('user_progress')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      if (progressError && progressError.code !== 'PGRST116') {
-        console.warn('No user progress found, will create default');
+      if (profileData) {
+        setUserProfile(profileData);
       }
 
-      // Load quiz count
-      const { count: quizCount } = await supabase
-        .from('quizzes')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
+      // Load user progress with error handling
+      const progressData = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('user_progress')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (error && error.code !== 'PGRST116') {
+          throw error;
+        }
+        return data;
+      });
 
-      // Load study sessions count
-      const { count: sessionsCount } = await supabase
-        .from('study_sessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
+      // Load quiz count with error handling
+      const quizCount = await safeSupabaseQuery(async () => {
+        const { count, error } = await supabase
+          .from('quizzes')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id);
+        
+        if (error) throw error;
+        return count;
+      }, 0);
+
+      // Load study sessions with error handling
+      const sessionsData = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('study_sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('completed_at', { ascending: false });
+        
+        if (error) throw error;
+        return data;
+      }, []);
+
+      // Load materials count with error handling
+      const materialsCount = await safeSupabaseQuery(async () => {
+        const { count, error } = await supabase
+          .from('study_materials')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id);
+        
+        if (error) throw error;
+        return count;
+      }, 0);
+
+      // Load recent quizzes for activity with error handling
+      const recentQuizzes = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('quizzes')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        if (error) throw error;
+        return data;
+      }, []);
+
+      // Load recent materials for activity with error handling
+      const recentMaterials = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('study_materials')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(3);
+        
+        if (error) throw error;
+        return data;
+      }, []);
 
       // Calculate stats
+      const totalSessions = sessionsData?.length || 0;
+      const totalTimeStudied = sessionsData?.reduce((sum, session) => sum + (session.time_spent || 0), 0) || 0;
+      const averageScore = totalSessions > 0 
+        ? Math.round(sessionsData.reduce((sum, session) => sum + (session.score / session.total_questions * 100), 0) / totalSessions)
+        : 0;
+
+      // Calculate achievements (mock for now)
+      const totalAchievements = Math.min(Math.floor((quizCount || 0) / 2) + Math.floor(totalSessions / 3), 15);
+      const totalPoints = totalAchievements * 50 + (quizCount || 0) * 10 + totalSessions * 5;
+      const level = Math.floor(totalPoints / 100) + 1;
+
       const stats: UserStats = {
         totalQuizzes: quizCount || 0,
-        totalStudySessions: sessionsCount || 0,
+        totalStudySessions: totalSessions,
+        totalMaterials: materialsCount || 0,
+        totalTimeStudied: Math.floor(totalTimeStudied / 60), // Convert to minutes
         currentStreak: progressData?.current_streak || 0,
-        totalPoints: (quizCount || 0) * 10 + (sessionsCount || 0) * 5, // Simple point calculation
-        level: Math.floor(((quizCount || 0) * 10 + (sessionsCount || 0) * 5) / 100) + 1,
-        recentActivity: []
+        longestStreak: progressData?.longest_streak || 0,
+        totalAchievements,
+        totalPoints,
+        level,
+        averageScore
       };
 
       setUserStats(stats);
-    } catch (error: any) {
+
+      // Build recent activity
+      const activity: RecentActivity[] = [];
+
+      // Add recent quizzes
+      recentQuizzes?.forEach(quiz => {
+        activity.push({
+          id: quiz.id,
+          type: 'quiz',
+          title: quiz.title,
+          description: `Created ${quiz.questions?.length || 0} questions`,
+          timestamp: quiz.created_at,
+          status: 'completed',
+          icon: '🧠',
+          color: 'bg-purple-500'
+        });
+      });
+
+      // Add recent materials
+      recentMaterials?.forEach(material => {
+        activity.push({
+          id: material.id,
+          type: 'material',
+          title: material.title,
+          description: `${material.file_type?.toUpperCase()} file uploaded`,
+          timestamp: material.created_at,
+          status: material.processing_status === 'completed' ? 'completed' : 'in-progress',
+          icon: material.file_type === 'image' ? '🖼️' : material.file_type === 'pdf' ? '📄' : '📝',
+          color: 'bg-blue-500'
+        });
+      });
+
+      // Add recent sessions
+      sessionsData?.slice(0, 3).forEach(session => {
+        const percentage = Math.round((session.score / session.total_questions) * 100);
+        activity.push({
+          id: session.id,
+          type: 'session',
+          title: 'Quiz Session Completed',
+          description: `Scored ${percentage}% on ${session.total_questions} questions`,
+          timestamp: session.completed_at,
+          progress: percentage,
+          status: 'completed',
+          icon: percentage >= 80 ? '🎉' : percentage >= 60 ? '👍' : '📚',
+          color: percentage >= 80 ? 'bg-green-500' : percentage >= 60 ? 'bg-yellow-500' : 'bg-orange-500'
+        });
+      });
+
+      // Sort by timestamp and take most recent
+      activity.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setRecentActivity(activity.slice(0, 8));
+
+    } catch (error) {
       console.error('Error loading user data:', error);
-      toast.error('Failed to load dashboard data');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load user data';
+      setConnectionError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  const retryConnection = async () => {
+    setIsRetrying(true);
+    try {
+      await loadUserData();
+      toast.success('Connection restored!');
+    } catch (error) {
+      toast.error('Still unable to connect. Please try again.');
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  // Get current user display info
+  const getUserDisplayInfo = () => {
+    if (userProfile) {
+      return {
+        name: userProfile.full_name || user?.email?.split('@')[0] || 'Student',
+        avatar: userProfile.avatar_url
+      };
+    }
+    return {
+      name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student',
+      avatar: null
+    };
+  };
+
+  const displayInfo = getUserDisplayInfo();
+
+  // Search functionality with error handling
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query);
+    
+    if (query.trim() === '') {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      const results: SearchResult[] = [];
+
+      // Search quizzes with error handling
+      const quizzes = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('quizzes')
+          .select('id, title, description')
+          .eq('user_id', user?.id)
+          .ilike('title', `%${query}%`)
+          .limit(3);
+        
+        if (error) throw error;
+        return data;
+      }, []);
+
+      quizzes?.forEach(quiz => {
+        results.push({
+          id: quiz.id,
+          type: 'quiz',
+          title: quiz.title,
+          description: quiz.description || 'Quiz',
+          category: 'Quiz',
+          action: () => handleNavigation('quiz-generator')
+        });
+      });
+
+      // Search materials with error handling
+      const materials = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('study_materials')
+          .select('id, title, file_type')
+          .eq('user_id', user?.id)
+          .ilike('title', `%${query}%`)
+          .limit(3);
+        
+        if (error) throw error;
+        return data;
+      }, []);
+
+      materials?.forEach(material => {
+        results.push({
+          id: material.id,
+          type: 'material',
+          title: material.title,
+          description: `${material.file_type?.toUpperCase()} file`,
+          category: 'Material',
+          action: () => handleNavigation('materials')
+        });
+      });
+
+      // Search study rooms with error handling
+      const rooms = await safeSupabaseQuery(async () => {
+        const { data, error } = await supabase
+          .from('study_rooms')
+          .select('id, name, description, subject')
+          .ilike('name', `%${query}%`)
+          .limit(3);
+        
+        if (error) throw error;
+        return data;
+      }, []);
+
+      rooms?.forEach(room => {
+        results.push({
+          id: room.id,
+          type: 'room',
+          title: room.name,
+          description: room.description || room.subject,
+          category: 'Study Room',
+          action: () => handleNavigation('study-rooms')
+        });
+      });
+
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+      toast.error('Search temporarily unavailable');
+    }
+  };
+
+  const handleSearchSelect = (result: SearchResult) => {
+    result.action();
+    setShowSearchModal(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    toast.success(`Opening ${result.title}`);
+  };
+
+  // Notification functionality
+  const markNotificationAsRead = (notificationId: string) => {
+    setNotifications(prev => 
+      prev.map(notif => 
+        notif.id === notificationId ? { ...notif, read: true } : notif
+      )
+    );
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setNotifications(prev => 
+      prev.map(notif => ({ ...notif, read: true }))
+    );
+  };
+
+  const deleteNotification = (notificationId: string) => {
+    setNotifications(prev => 
+      prev.filter(notif => notif.id !== notificationId)
+    );
+  };
+
+  const clearAllNotifications = () => {
+    setNotifications([]);
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'achievement': return Trophy;
+      case 'reminder': return Clock;
+      case 'social': return Users;
+      case 'quiz': return Brain;
+      case 'system': return Settings;
+      default: return Bell;
+    }
+  };
+
+  const getNotificationColor = (type: string) => {
+    switch (type) {
+      case 'achievement': return 'text-yellow-600 bg-yellow-100';
+      case 'reminder': return 'text-blue-600 bg-blue-100';
+      case 'social': return 'text-green-600 bg-green-100';
+      case 'quiz': return 'text-purple-600 bg-purple-100';
+      case 'system': return 'text-gray-600 bg-gray-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getSearchIcon = (type: string) => {
+    switch (type) {
+      case 'quiz': return Brain;
+      case 'material': return FileText;
+      case 'room': return Users;
+      case 'achievement': return Trophy;
+      case 'user': return User;
+      default: return Search;
+    }
+  };
+
+  const formatTimeAgo = (timestamp: string) => {
+    const now = new Date();
+    const time = new Date(timestamp);
+    const diffInMinutes = Math.floor((now.getTime() - time.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
   };
 
   const handleSignOut = async () => {
     try {
       await signOut();
       toast.success('Signed out successfully');
+      if (onNavigate) {
+        onNavigate('home');
+      }
     } catch (error) {
       toast.error('Error signing out');
     }
   };
 
-  const quickActions: QuickAction[] = [
-    {
-      id: 'create-quiz',
-      title: 'Create Quiz',
-      description: 'Generate AI-powered quizzes from your materials',
-      icon: Brain,
-      color: 'bg-purple-500',
-      action: () => onNavigate('quiz-generator')
-    },
-    {
-      id: 'join-room',
-      title: 'Study Room',
-      description: 'Join or create collaborative study sessions',
-      icon: Users,
-      color: 'bg-blue-500',
-      action: () => onNavigate('study-rooms')
-    },
-    {
-      id: 'browse-marketplace',
-      title: 'Marketplace',
-      description: 'Discover and share study materials',
-      icon: ShoppingBag,
-      color: 'bg-green-500',
-      action: () => onNavigate('marketplace')
-    },
-    {
-      id: 'upload-materials',
-      title: 'Upload Materials',
-      description: 'Add new study materials and resources',
-      icon: FileText,
-      color: 'bg-orange-500',
-      action: () => onNavigate('materials')
+  const handleSubPageNavigation = (page: string, data?: any) => {
+    // Store the complete quiz data when navigating to any sub-page
+    if (data && data.quiz) {
+      setQuizGeneratorState({
+        quiz: data.quiz,
+        audioUrl: data.audioUrl || null
+      });
     }
-  ];
+    
+    setCurrentSubPage(page);
+    setSubPageData(data);
+  };
 
-  const sidebarItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-    { id: 'quiz-generator', label: 'Quiz Generator', icon: Brain },
-    { id: 'study-rooms', label: 'Study Rooms', icon: Users },
-    { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
-    { id: 'materials', label: 'My Materials', icon: FileText },
-    { id: 'achievements', label: 'Achievements', icon: Trophy },
-    { id: 'settings', label: 'Settings', icon: Settings },
-    { id: 'help', label: 'Help Center', icon: HelpCircle },
-  ];
+  const handleBackToQuizOverview = () => {
+    // Return to the quiz overview (review step) with preserved state
+    setCurrentSubPage(null);
+    setSubPageData(null);
+    // The QuizGenerator will remain in 'review' state showing the overview
+  };
 
-  const renderContent = () => {
-    switch (currentPage) {
-      case 'quiz-generator':
-        return <QuizGenerator onNavigate={onNavigate} />;
-      case 'study-rooms':
-        return <StudyRoom onNavigate={onNavigate} />;
-      case 'marketplace':
-        return <MarketplaceManager onNavigate={onNavigate} />;
-      case 'materials':
-        return <MaterialsManager onNavigate={onNavigate} />;
-      case 'achievements':
-        return <AchievementsManager onNavigate={onNavigate} />;
-      case 'settings':
-        return <SettingsManager onNavigate={onNavigate} />;
-      case 'help':
-        return <HelpCenter onNavigate={onNavigate} />;
-      default:
-        return renderDashboardHome();
+  const handleNavigateFromSubPage = (targetView: 'audio' | 'flashcards' | 'take-quiz') => {
+    if (!quizGeneratorState || !quizGeneratorState.quiz) {
+      toast.error('Quiz data not available. Returning to overview.');
+      handleBackToQuizOverview();
+      return;
+    }
+
+    const quiz = quizGeneratorState.quiz;
+    const audioUrl = quizGeneratorState.audioUrl;
+
+    switch (targetView) {
+      case 'audio':
+        setCurrentSubPage('audio-player');
+        setSubPageData({
+          quiz: quiz,
+          audioUrl: audioUrl || 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav',
+          title: quiz.title,
+          description: quiz.description
+        });
+        break;
+      
+      case 'flashcards':
+        setCurrentSubPage('flashcards');
+        setSubPageData({
+          quiz: quiz,
+          audioUrl: audioUrl,
+          title: quiz.title,
+          flashcards: quiz.flashcards
+        });
+        break;
+      
+      case 'take-quiz':
+        setCurrentSubPage('take-quiz');
+        setSubPageData({
+          quiz: quiz,
+          audioUrl: audioUrl
+        });
+        break;
     }
   };
 
-  const renderDashboardHome = () => (
-    <div className="space-y-8">
-      {/* Welcome Section */}
-      <div className="bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 rounded-2xl p-8 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-black bg-opacity-10"></div>
-        <div className="relative z-10">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">
-                Welcome back, {profile?.full_name || user?.email?.split('@')[0] || 'Student'}! 👋
-              </h1>
-              <p className="text-purple-100 text-lg">
-                Ready to continue your learning journey?
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold">Level {userStats?.level || 1}</div>
-              <div className="text-purple-100">{userStats?.totalPoints || 0} points</div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Decorative elements */}
-        <div className="absolute top-4 right-4 w-32 h-32 bg-white bg-opacity-10 rounded-full blur-xl"></div>
-        <div className="absolute bottom-4 left-4 w-24 h-24 bg-white bg-opacity-10 rounded-full blur-xl"></div>
-      </div>
+  const sidebarItems = [
+    { icon: Home, label: 'Home', page: 'dashboard' },
+    { icon: Brain, label: 'Quiz Generator', page: 'quiz-generator' },
+    { icon: Users, label: 'Study Rooms', page: 'study-rooms' },
+    { icon: FileText, label: 'Materials', page: 'materials' },
+    { icon: Award, label: 'Achievements', page: 'achievements' },
+    { icon: ShoppingBag, label: 'Marketplace', page: 'marketplace' },
+  ];
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-500 text-sm">Total Quizzes</p>
-              <p className="text-2xl font-bold text-gray-900">{userStats?.totalQuizzes || 0}</p>
-            </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Brain className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-        </div>
+  const bottomSidebarItems = [
+    { icon: Settings, label: 'Settings', page: 'settings' },
+    { icon: HelpCircle, label: 'Help Center', page: 'help' },
+  ];
 
-        <div className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-500 text-sm">Study Sessions</p>
-              <p className="text-2xl font-bold text-gray-900">{userStats?.totalStudySessions || 0}</p>
-            </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <BookOpen className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-        </div>
+  const handleNavigation = (page: string) => {
+    if (onNavigate) {
+      onNavigate(page);
+    }
+  };
 
-        <div className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-500 text-sm">Current Streak</p>
-              <p className="text-2xl font-bold text-gray-900">{userStats?.currentStreak || 0} days</p>
-            </div>
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-              <Zap className="w-6 h-6 text-orange-600" />
-            </div>
-          </div>
+  // Connection Error Component
+  const ConnectionError = () => (
+    <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
+      <div className="flex items-center space-x-3 mb-4">
+        <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+          <WifiOff className="w-5 h-5 text-red-600" />
         </div>
-
-        <div className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-500 text-sm">Total Points</p>
-              <p className="text-2xl font-bold text-gray-900">{userStats?.totalPoints || 0}</p>
-            </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <Star className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
+        <div>
+          <h3 className="text-lg font-semibold text-red-900">Connection Error</h3>
+          <p className="text-red-700">{connectionError}</p>
         </div>
       </div>
+      <button
+        onClick={retryConnection}
+        disabled={isRetrying}
+        className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isRetrying ? (
+          <RefreshCw className="w-4 h-4 animate-spin" />
+        ) : (
+          <RefreshCw className="w-4 h-4" />
+        )}
+        <span>{isRetrying ? 'Retrying...' : 'Retry Connection'}</span>
+      </button>
+    </div>
+  );
 
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {quickActions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <button
-                key={action.id}
-                onClick={action.action}
-                className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-all duration-300 text-left group hover:scale-105"
-              >
-                <div className={`w-12 h-12 ${action.color} rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                  <Icon className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-2">{action.title}</h3>
-                <p className="text-sm text-gray-600">{action.description}</p>
-                <div className="flex items-center mt-4 text-sm text-gray-500 group-hover:text-gray-700">
-                  <span>Get started</span>
-                  <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+  const renderMainContent = () => {
+    // Handle sub-pages for quiz generator
+    if (currentPage === 'quiz-generator') {
+      if (currentSubPage === 'audio-player' && subPageData) {
+        return (
+          <AudioPlayer
+            title={subPageData.title}
+            description={subPageData.description}
+            audioUrl={subPageData.audioUrl}
+            onBack={handleBackToQuizOverview}
+            onNavigate={handleNavigateFromSubPage}
+            quizData={subPageData.quiz}
+          />
+        );
+      }
+      
+      if (currentSubPage === 'flashcards' && subPageData) {
+        return (
+          <FlashcardsViewer
+            title={subPageData.title}
+            flashcards={subPageData.flashcards}
+            onBack={handleBackToQuizOverview}
+            onNavigate={handleNavigateFromSubPage}
+            quizData={subPageData.quiz}
+          />
+        );
+      }
 
-      {/* Recent Activity & Tips */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Recent Activity */}
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <h3 className="font-bold text-gray-900 mb-4 flex items-center">
-            <Activity className="w-5 h-5 mr-2" />
-            Recent Activity
-          </h3>
-          <div className="space-y-4">
-            {userStats?.recentActivity?.length ? (
-              userStats.recentActivity.map((activity, index) => (
-                <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <BookOpen className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{activity.title}</p>
-                    <p className="text-xs text-gray-500">{activity.time}</p>
+      if (currentSubPage === 'take-quiz' && subPageData) {
+        return (
+          <QuizTaker
+            quiz={subPageData.quiz}
+            onBack={handleBackToQuizOverview}
+            onNavigate={handleNavigateFromSubPage}
+          />
+        );
+      }
+      
+      return (
+        <QuizGenerator 
+          onNavigate={handleSubPageNavigation} 
+          initialGeneratedQuiz={quizGeneratorState?.quiz}
+        />
+      );
+    }
+
+    switch (currentPage) {
+      case 'study-rooms':
+        return <StudyRoom onNavigate={handleNavigation} />;
+      case 'materials':
+        return <MaterialsManager onNavigate={handleNavigation} />;
+      case 'achievements':
+        return <AchievementsManager onNavigate={handleNavigation} />;
+      case 'marketplace':
+        return <MarketplaceManager onNavigate={handleNavigation} />;
+      case 'settings':
+        return <SettingsManager onNavigate={handleNavigation} />;
+      case 'help':
+        return <HelpCenter onNavigate={handleNavigation} />;
+      default:
+        return (
+          <div className="space-y-8">
+            {/* Connection Error Banner */}
+            {connectionError && <ConnectionError />}
+
+            {/* Real-time Stats Cards */}
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-teal-500 rounded-xl flex items-center justify-center">
+                    <Brain className="w-6 h-6 text-white" />
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-8">
-                <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">No recent activity</p>
-                <p className="text-sm text-gray-400">Start studying to see your activity here</p>
+                <div className="text-3xl font-bold text-gray-900 mb-1">{userStats?.totalQuizzes || 0}</div>
+                <div className="text-sm text-gray-600 mb-4">Quizzes Created</div>
+                <button 
+                  onClick={() => handleNavigation('quiz-generator')}
+                  className="flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Create new quiz
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </button>
               </div>
-            )}
+
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold text-gray-900 mb-1">{userStats?.totalStudySessions || 0}</div>
+                <div className="text-sm text-gray-600 mb-4">Study Sessions</div>
+                <button className="flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors">
+                  {userStats?.totalTimeStudied || 0} minutes studied
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </button>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center">
+                    <Trophy className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold text-gray-900 mb-1">{userStats?.totalAchievements || 0}</div>
+                <div className="text-sm text-gray-600 mb-4">Achievements</div>
+                <button 
+                  onClick={() => handleNavigation('achievements')}
+                  className="flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Level {userStats?.level || 1} • {userStats?.totalPoints || 0} points
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </button>
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div className="bg-white rounded-xl border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold text-gray-900">Recent Activity</h2>
+                  <button className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+                    View All
+                  </button>
+                </div>
+              </div>
+              <div className="p-6">
+                {loading ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="animate-pulse flex items-center space-x-4">
+                        <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : recentActivity.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <TrendingUp className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No recent activity</h3>
+                    <p className="text-gray-600 mb-4">Start creating quizzes and studying to see your activity here!</p>
+                    <button 
+                      onClick={() => handleNavigation('quiz-generator')}
+                      className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      Create Your First Quiz
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentActivity.map((activity) => (
+                      <div key={activity.id} className="flex items-center space-x-4 p-4 hover:bg-gray-50 rounded-lg transition-colors">
+                        <div className={`w-10 h-10 ${activity.color} rounded-lg flex items-center justify-center text-white text-lg`}>
+                          {activity.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium text-gray-900 truncate">{activity.title}</h4>
+                            <span className="text-sm text-gray-500">{formatTimeAgo(activity.timestamp)}</span>
+                          </div>
+                          <p className="text-sm text-gray-600 truncate">{activity.description}</p>
+                          {activity.progress !== undefined && (
+                            <div className="mt-2 flex items-center space-x-2">
+                              <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                <div 
+                                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                                  style={{ width: `${activity.progress}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-xs text-gray-500">{activity.progress}%</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {activity.status === 'completed' ? (
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          ) : activity.status === 'in-progress' ? (
+                            <Clock className="w-5 h-5 text-orange-500" />
+                          ) : (
+                            <Circle className="w-5 h-5 text-blue-500" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Study Insights */}
+            <div className="bg-white rounded-xl border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold text-gray-900">Study Insights</h2>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600 mb-2">{userStats?.averageScore || 0}%</div>
+                    <div className="text-sm text-gray-600">Average Score</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600 mb-2">{userStats?.currentStreak || 0}</div>
+                    <div className="text-sm text-gray-600">Current Streak</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600 mb-2">{userStats?.totalMaterials || 0}</div>
+                    <div className="text-sm text-gray-600">Study Materials</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+    }
+  };
+
+  // Check if we're in a sub-page that should hide the sidebar
+  const isInSubPage = currentPage === 'quiz-generator' && currentSubPage;
+
+  // Search Modal Component
+  const SearchModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 pt-20">
+      <div className="bg-white rounded-2xl w-full max-w-2xl mx-4 shadow-2xl">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center space-x-4">
+            <Search className="w-6 h-6 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search quizzes, materials, rooms..."
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="flex-1 text-lg border-none outline-none"
+              autoFocus
+            />
+            <button
+              onClick={() => {
+                setShowSearchModal(false);
+                setSearchQuery('');
+                setSearchResults([]);
+              }}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
         </div>
 
-        {/* Study Tips */}
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
-          <h3 className="font-bold text-gray-900 mb-4 flex items-center">
-            <Lightbulb className="w-5 h-5 mr-2 text-yellow-500" />
-            Study Tips
-          </h3>
-          <div className="space-y-4">
-            <div className="flex items-start space-x-3">
-              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-white text-xs font-bold">1</span>
+        <div className="max-h-96 overflow-y-auto">
+          {searchQuery === '' ? (
+            <div className="p-8 text-center">
+              <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Search StudySnap</h3>
+              <p className="text-gray-600">Find your quizzes, study materials, and more</p>
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div className="p-8 text-center">
+              <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No results found</h3>
+              <p className="text-gray-600">Try searching for something else</p>
+            </div>
+          ) : (
+            <div className="p-4">
+              <div className="text-sm text-gray-500 mb-4">
+                {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Use Active Recall</p>
-                <p className="text-xs text-gray-600">Test yourself frequently instead of just re-reading notes</p>
+              <div className="space-y-2">
+                {searchResults.map((result) => {
+                  const Icon = getSearchIcon(result.type);
+                  return (
+                    <button
+                      key={result.id}
+                      onClick={() => handleSearchSelect(result)}
+                      className="w-full flex items-center space-x-4 p-4 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                    >
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <Icon className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-900 truncate">{result.title}</h4>
+                        <p className="text-sm text-gray-600 truncate">{result.description}</p>
+                      </div>
+                      <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                        {result.category}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-            <div className="flex items-start space-x-3">
-              <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-white text-xs font-bold">2</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Spaced Repetition</p>
-                <p className="text-xs text-gray-600">Review material at increasing intervals for better retention</p>
-              </div>
-            </div>
-            <div className="flex items-start space-x-3">
-              <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-white text-xs font-bold">3</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Study Groups</p>
-                <p className="text-xs text-gray-600">Join study rooms to learn collaboratively with peers</p>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
   );
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your dashboard...</p>
+  // Notifications Dropdown Component
+  const NotificationsDropdown = () => (
+    <div className="absolute right-0 top-12 w-96 bg-white rounded-xl shadow-2xl border border-gray-200 z-50">
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
+          <div className="flex items-center space-x-2">
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllNotificationsAsRead}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Mark all read
+              </button>
+            )}
+            <button
+              onClick={() => setShowNotifications(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        {/* Logo */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center">
-              <GraduationCap className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-xl font-bold text-gray-900">StudySnap</span>
+      <div className="max-h-96 overflow-y-auto">
+        {notifications.length === 0 ? (
+          <div className="p-8 text-center">
+            <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h4 className="text-lg font-semibold text-gray-900 mb-2">No notifications</h4>
+            <p className="text-gray-600">You're all caught up!</p>
           </div>
-        </div>
-
-        {/* User Profile */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <img
-              src={profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.full_name || user?.email || 'User')}&size=40&background=6366f1&color=ffffff`}
-              alt="Profile"
-              className="w-10 h-10 rounded-full"
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {profile?.full_name || user?.email?.split('@')[0] || 'User'}
-              </p>
-              <p className="text-xs text-gray-500 truncate">
-                Level {userStats?.level || 1} • {userStats?.totalPoints || 0} pts
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 p-4">
-          <div className="space-y-2">
-            {sidebarItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentPage === item.id;
-              
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {notifications.map((notification) => {
+              const Icon = getNotificationIcon(notification.type);
               return (
-                <button
-                  key={item.id}
-                  onClick={() => onNavigate(item.id)}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
-                    isActive
-                      ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                <div
+                  key={notification.id}
+                  className={`p-4 hover:bg-gray-50 transition-colors ${
+                    !notification.read ? 'bg-blue-50' : ''
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium">{item.label}</span>
-                </button>
+                  <div className="flex items-start space-x-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getNotificationColor(notification.type)}`}>
+                      <span className="text-lg">{notification.icon}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h4 className={`font-medium ${!notification.read ? 'text-gray-900' : 'text-gray-700'}`}>
+                          {notification.title}
+                        </h4>
+                        <div className="flex items-center space-x-2">
+                          {!notification.read && (
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          )}
+                          <button
+                            onClick={() => deleteNotification(notification.id)}
+                            className="text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      <p className={`text-sm mt-1 ${!notification.read ? 'text-gray-700' : 'text-gray-600'}`}>
+                        {notification.message}
+                      </p>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs text-gray-500">{notification.time}</span>
+                        <div className="flex items-center space-x-2">
+                          {notification.action && (
+                            <button
+                              onClick={() => {
+                                notification.action!();
+                                markNotificationAsRead(notification.id);
+                                setShowNotifications(false);
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                            >
+                              View
+                            </button>
+                          )}
+                          {!notification.read && (
+                            <button
+                              onClick={() => markNotificationAsRead(notification.id)}
+                              className="text-xs text-gray-500 hover:text-gray-700"
+                            >
+                              Mark read
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               );
             })}
           </div>
-        </nav>
+        )}
+      </div>
 
-        {/* Sign Out */}
+      {notifications.length > 0 && (
         <div className="p-4 border-t border-gray-200">
           <button
-            onClick={handleSignOut}
-            className="w-full flex items-center space-x-3 px-4 py-3 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            onClick={clearAllNotifications}
+            className="w-full text-center text-sm text-red-600 hover:text-red-700 font-medium"
           >
-            <LogOut className="w-5 h-5" />
-            <span className="font-medium">Sign Out</span>
+            Clear all notifications
           </button>
         </div>
-      </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Sidebar - Hide only for Quiz Generator sub-pages */}
+      {!isInSubPage && (
+        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+          {/* Logo */}
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
+                <Zap className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-2xl font-bold text-gray-900">StudySnap</span>
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <div className="flex-1 py-6">
+            <nav className="px-4 space-y-1">
+              {sidebarItems.map((item, index) => {
+                const Icon = item.icon;
+                const isActive = currentPage === item.page;
+                return (
+                  <button
+                    key={index}
+                    onClick={() => handleNavigation(item.page)}
+                    className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Bottom Navigation */}
+          <div className="p-4 border-t border-gray-200">
+            <nav className="space-y-1">
+              {bottomSidebarItems.map((item, index) => {
+                const Icon = item.icon;
+                const isActive = currentPage === item.page;
+                return (
+                  <button
+                    key={index}
+                    onClick={() => handleNavigation(item.page)}
+                    className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+              <button
+                onClick={handleSignOut}
+                className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
+              >
+                <LogOut className="w-5 h-5" />
+                <span>Sign Out</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        {renderContent()}
+      <div className="flex-1 flex flex-col">
+        {/* Header - Show for all pages except Quiz Generator sub-pages */}
+        {!isInSubPage && (
+          <header className="bg-white border-b border-gray-200 px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Welcome back, {displayInfo.name}! 👋
+                </h1>
+                {userStats && (
+                  <p className="text-gray-600">
+                    Level {userStats.level} • {userStats.totalPoints} points • {userStats.currentStreak} day streak
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center space-x-4">
+                {/* Connection Status Indicator */}
+                <div className="flex items-center space-x-2">
+                  {connectionError ? (
+                    <div className="flex items-center space-x-1 text-red-600">
+                      <WifiOff className="w-4 h-4" />
+                      <span className="text-xs">Offline</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-1 text-green-600">
+                      <Wifi className="w-4 h-4" />
+                      <span className="text-xs">Online</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Search Button */}
+                <button 
+                  onClick={() => setShowSearchModal(true)}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+                  title="Search"
+                >
+                  <Search className="w-5 h-5" />
+                </button>
+                
+                {/* Notifications Button */}
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors relative rounded-lg hover:bg-gray-100"
+                    title="Notifications"
+                  >
+                    <Bell className="w-5 h-5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </button>
+                  {showNotifications && <NotificationsDropdown />}
+                </div>
+                
+                {/* Profile */}
+                <div className="flex items-center space-x-3">
+                  <img
+                    src={displayInfo.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayInfo.name)}&size=32&background=6366f1&color=ffffff`}
+                    alt="Profile"
+                    className="w-8 h-8 rounded-full"
+                  />
+                  <div className="text-sm">
+                    <div className="font-medium text-gray-900">
+                      {displayInfo.name}
+                    </div>
+                    <div className="text-gray-500">Basic Member</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </header>
+        )}
+
+        {/* Dashboard Content */}
+        <main className={`flex-1 ${!isInSubPage && currentPage !== 'quiz-generator' && currentPage !== 'study-rooms' && currentPage !== 'materials' && currentPage !== 'achievements' && currentPage !== 'marketplace' && currentPage !== 'settings' && currentPage !== 'help' ? 'p-8' : ''}`}>
+          {/* Conditional container width based on current page */}
+          {currentPage === 'quiz-generator' || isInSubPage || currentPage === 'study-rooms' || currentPage === 'materials' || currentPage === 'achievements' || currentPage === 'marketplace' || currentPage === 'settings' || currentPage === 'help' ? (
+            // Full width for Quiz Generator, sub-pages, Study Rooms, Materials, Achievements, Marketplace, Settings, and Help
+            <div className="w-full">
+              {renderMainContent()}
+            </div>
+          ) : (
+            // Constrained width for other pages with sidebar layout
+            <div className="max-w-7xl mx-auto">
+              <div className="grid lg:grid-cols-4 gap-8">
+                {/* Main Content Area */}
+                <div className="lg:col-span-3">
+                  {renderMainContent()}
+                </div>
+
+                {/* Right Sidebar - Only show on dashboard home */}
+                {currentPage === 'dashboard' && (
+                  <div className="space-y-6">
+                    {/* Progress Card */}
+                    <div className="bg-white rounded-xl p-6 border border-gray-200">
+                      <div className="flex items-center justify-between mb-6">
+                        <h3 className="font-bold text-gray-900">Your Progress</h3>
+                        <button className="p-1">
+                          <MoreHorizontal className="w-4 h-4 text-gray-400" />
+                        </button>
+                      </div>
+                      <div className="text-center mb-6">
+                        <img
+                          src={displayInfo.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayInfo.name)}&size=64&background=6366f1&color=ffffff`}
+                          alt="Profile"
+                          className="w-16 h-16 rounded-full mx-auto mb-4"
+                        />
+                        <h4 className="font-bold text-gray-900">
+                          {displayInfo.name}
+                        </h4>
+                        <p className="text-sm text-gray-500">Level {userStats?.level || 1} • {userStats?.totalPoints || 0} points</p>
+                      </div>
+                      <div className="mb-6">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-2xl font-bold text-gray-900">{userStats?.totalTimeStudied || 0}</span>
+                          <select className="text-sm text-gray-500 border-none bg-transparent">
+                            <option>This week</option>
+                          </select>
+                        </div>
+                        <p className="text-sm text-gray-500">Minutes studied</p>
+                      </div>
+                      
+                      {/* Progress visualization */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Study Streak</span>
+                          <span className="font-medium">{userStats?.currentStreak || 0} days</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-orange-500 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${Math.min((userStats?.currentStreak || 0) / 30 * 100, 100)}%` }}
+                          ></div>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Average Score</span>
+                          <span className="font-medium">{userStats?.averageScore || 0}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${userStats?.averageScore || 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="bg-white rounded-xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-gray-900 mb-4">Quick Actions</h3>
+                      <div className="space-y-3">
+                        <button 
+                          onClick={() => handleNavigation('quiz-generator')}
+                          className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
+                            <Camera className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="font-medium text-gray-900">Create Quiz</span>
+                        </button>
+                        <button 
+                          onClick={() => handleNavigation('study-rooms')}
+                          className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+                            <Users className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="font-medium text-gray-900">Join Study Room</span>
+                        </button>
+                        <button 
+                          onClick={() => handleNavigation('materials')}
+                          className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                            <FileText className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="font-medium text-gray-900">Manage Materials</span>
+                        </button>
+                        <button 
+                          onClick={() => handleNavigation('achievements')}
+                          className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+                            <Award className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="font-medium text-gray-900">View Achievements</span>
+                        </button>
+                        <button 
+                          onClick={() => handleNavigation('marketplace')}
+                          className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                            <ShoppingBag className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="font-medium text-gray-900">Browse Marketplace</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </main>
       </div>
 
-      {/* Study Assistant Chatbot - Only show when user is authenticated */}
-      {user && <StudyAssistantChatbot agentId={STUDY_ASSISTANT_AGENT_ID} />}
+      {/* Search Modal */}
+      {showSearchModal && <SearchModal />}
     </div>
   );
 };

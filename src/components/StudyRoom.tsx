@@ -34,7 +34,14 @@ import {
   Shield,
   X,
   Hash,
-  ArrowRight
+  ArrowRight,
+  Send,
+  Paperclip,
+  Smile,
+  Phone,
+  Video,
+  MoreHorizontal,
+  ArrowLeft
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -62,6 +69,30 @@ interface StudyRoom {
   user_role?: string;
 }
 
+interface RoomParticipant {
+  id: string;
+  user_id: string;
+  role: string;
+  joined_at: string;
+  is_active: boolean;
+  profiles: {
+    full_name: string;
+    avatar_url?: string;
+  };
+}
+
+interface RoomMessage {
+  id: string;
+  user_id: string;
+  message: string;
+  message_type: string;
+  created_at: string;
+  profiles: {
+    full_name: string;
+    avatar_url?: string;
+  };
+}
+
 interface StudyRoomProps {
   onNavigate?: (page: string) => void;
 }
@@ -78,6 +109,11 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joiningRoom, setJoiningRoom] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState<StudyRoom | null>(null);
+  const [roomParticipants, setRoomParticipants] = useState<RoomParticipant[]>([]);
+  const [roomMessages, setRoomMessages] = useState<RoomMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [newRoom, setNewRoom] = useState({
     name: '',
     description: '',
@@ -101,6 +137,13 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       loadRooms();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (selectedRoom) {
+      loadRoomDetails();
+      loadRoomMessages();
+    }
+  }, [selectedRoom]);
 
   const loadRooms = async () => {
     if (!user) return;
@@ -156,6 +199,76 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
       toast.error('Failed to load study rooms');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRoomDetails = async () => {
+    if (!selectedRoom || !user) return;
+
+    try {
+      // Load participants
+      const { data: participants, error: participantsError } = await supabase
+        .from('room_participants')
+        .select(`
+          *,
+          profiles(full_name, avatar_url)
+        `)
+        .eq('room_id', selectedRoom.id)
+        .eq('is_active', true)
+        .order('joined_at', { ascending: true });
+
+      if (participantsError) throw participantsError;
+      setRoomParticipants(participants || []);
+    } catch (error: any) {
+      console.error('Error loading room details:', error);
+    }
+  };
+
+  const loadRoomMessages = async () => {
+    if (!selectedRoom || !user) return;
+
+    try {
+      const { data: messages, error: messagesError } = await supabase
+        .from('room_messages')
+        .select(`
+          *,
+          profiles(full_name, avatar_url)
+        `)
+        .eq('room_id', selectedRoom.id)
+        .order('created_at', { ascending: true })
+        .limit(50);
+
+      if (messagesError) throw messagesError;
+      setRoomMessages(messages || []);
+    } catch (error: any) {
+      console.error('Error loading messages:', error);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!selectedRoom || !user || !newMessage.trim()) return;
+
+    try {
+      setSendingMessage(true);
+      
+      const { error } = await supabase
+        .from('room_messages')
+        .insert({
+          room_id: selectedRoom.id,
+          user_id: user.id,
+          message: newMessage.trim(),
+          message_type: 'text'
+        });
+
+      if (error) throw error;
+
+      setNewMessage('');
+      await loadRoomMessages();
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message');
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -341,6 +454,24 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     } catch (error: any) {
       console.error('Error leaving room:', error);
       toast.error('Failed to leave room');
+    }
+  };
+
+  const enterRoom = async (room: StudyRoom) => {
+    if (!user) return;
+
+    // If user is not a participant, join first
+    if (!room.is_participant) {
+      await joinRoom(room.id);
+      // Reload rooms to get updated participation status
+      await loadRooms();
+      // Find the updated room
+      const updatedRoom = rooms.find(r => r.id === room.id);
+      if (updatedRoom && updatedRoom.is_participant) {
+        setSelectedRoom(updatedRoom);
+      }
+    } else {
+      setSelectedRoom(room);
     }
   };
 
@@ -596,6 +727,142 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     </div>
   );
 
+  // Room Interface Component
+  const RoomInterface = () => {
+    if (!selectedRoom) return null;
+
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Room Header */}
+        <div className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setSelectedRoom(null)}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  {getSessionTypeIcon(selectedRoom.session_type)}
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">{selectedRoom.name}</h1>
+                  <p className="text-sm text-gray-500">
+                    {selectedRoom.subject} • {roomParticipants.length} participants
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => copyRoomCode(selectedRoom.room_code)}
+                className="flex items-center space-x-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                <Hash className="w-4 h-4" />
+                <span className="font-mono">{selectedRoom.room_code}</span>
+              </button>
+              <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100">
+                <MoreHorizontal className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex h-[calc(100vh-80px)]">
+          {/* Main Chat Area */}
+          <div className="flex-1 flex flex-col">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {roomMessages.length === 0 ? (
+                <div className="text-center py-12">
+                  <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No messages yet</h3>
+                  <p className="text-gray-600">Start the conversation by sending the first message!</p>
+                </div>
+              ) : (
+                roomMessages.map((message) => (
+                  <div key={message.id} className="flex items-start space-x-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-medium text-blue-600">
+                        {message.profiles.full_name?.charAt(0) || 'U'}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <span className="font-medium text-gray-900">{message.profiles.full_name}</span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(message.created_at).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <p className="text-gray-700">{message.message}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Message Input */}
+            <div className="border-t border-gray-200 p-4">
+              <div className="flex items-center space-x-3">
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                    placeholder="Type a message..."
+                    className="w-full p-3 pr-12 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={sendingMessage}
+                  />
+                  <button className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <Smile className="w-5 h-5" />
+                  </button>
+                </div>
+                <button className="p-3 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100">
+                  <Paperclip className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={sendMessage}
+                  disabled={sendingMessage || !newMessage.trim()}
+                  className="p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Participants Sidebar */}
+          <div className="w-80 bg-white border-l border-gray-200">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="font-semibold text-gray-900">Participants ({roomParticipants.length})</h3>
+            </div>
+            <div className="p-4 space-y-3">
+              {roomParticipants.map((participant) => (
+                <div key={participant.id} className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-medium text-blue-600">
+                      {participant.profiles.full_name?.charAt(0) || 'U'}
+                    </span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{participant.profiles.full_name}</p>
+                    <p className="text-xs text-gray-500 capitalize">{participant.role}</p>
+                  </div>
+                  {participant.role === 'host' && (
+                    <Crown className="w-4 h-4 text-yellow-500" />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -605,6 +872,11 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         </div>
       </div>
     );
+  }
+
+  // If a room is selected, show the room interface
+  if (selectedRoom) {
+    return <RoomInterface />;
   }
 
   return (
@@ -727,7 +999,11 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredRooms.map((room) => (
-              <div key={room.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all duration-300">
+              <div 
+                key={room.id} 
+                className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all duration-300 cursor-pointer"
+                onClick={() => enterRoom(room)}
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -772,7 +1048,10 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => copyRoomCode(room.room_code)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        copyRoomCode(room.room_code);
+                      }}
                       className="flex items-center space-x-1 text-gray-500 hover:text-blue-600 transition-colors"
                       title="Copy room code"
                     >
@@ -781,22 +1060,31 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
                     </button>
                   </div>
                   
-                  {room.is_participant ? (
-                    <button
-                      onClick={() => leaveRoom(room.id)}
-                      className="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
-                    >
-                      Leave
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => joinRoom(room.id)}
-                      disabled={room.participant_count >= room.max_participants}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {room.participant_count >= room.max_participants ? 'Full' : 'Join'}
-                    </button>
-                  )}
+                  <div className="flex items-center space-x-2">
+                    {room.is_participant ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          leaveRoom(room.id);
+                        }}
+                        className="px-3 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+                      >
+                        Leave
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          joinRoom(room.id);
+                        }}
+                        disabled={room.participant_count >= room.max_participants}
+                        className="px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {room.participant_count >= room.max_participants ? 'Full' : 'Join'}
+                      </button>
+                    )}
+                    <span className="text-blue-600 text-sm font-medium">Enter →</span>
+                  </div>
                 </div>
               </div>
             ))}

@@ -28,7 +28,8 @@ import {
   Smile,
   Hash,
   Key,
-  ArrowRight
+  ArrowRight,
+  X
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -269,42 +270,22 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
         return;
       }
 
-      // Check if user is already a participant
-      const { data: existingParticipant, error: checkError } = await supabase
-        .from('room_participants')
-        .select('id')
-        .eq('room_id', roomId)
-        .eq('user_id', user?.id)
-        .eq('is_active', true)
-        .single();
-
-      if (checkError && checkError.code !== 'PGRST116') {
-        console.error('Error checking participation:', checkError);
-        setJoinError('Failed to check room participation');
-        return;
-      }
-
-      if (existingParticipant) {
-        setJoinError('You are already a participant in this room');
-        return;
-      }
-
-      // Join the room
+      // Use upsert to handle existing records
       const { error: joinError } = await supabase
         .from('room_participants')
-        .insert({
+        .upsert({
           room_id: roomId,
           user_id: user?.id,
-          role: 'participant'
+          role: 'participant',
+          is_active: true,
+          joined_at: new Date().toISOString()
+        }, {
+          onConflict: 'room_id,user_id'
         });
 
       if (joinError) {
         console.error('Error joining room:', joinError);
-        if (joinError.message?.includes('duplicate key')) {
-          setJoinError('You are already a participant in this room');
-        } else {
-          setJoinError('Failed to join room. Please try again.');
-        }
+        setJoinError('Failed to join room. Please try again.');
         return;
       }
 
@@ -331,22 +312,20 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
     if (!user) return;
 
     try {
+      // Use upsert to handle existing records
       const { error } = await supabase
         .from('room_participants')
-        .insert({
+        .upsert({
           room_id: room.id,
           user_id: user.id,
-          role: 'participant'
+          role: 'participant',
+          is_active: true,
+          joined_at: new Date().toISOString()
+        }, {
+          onConflict: 'room_id,user_id'
         });
 
-      if (error) {
-        if (error.message?.includes('duplicate key')) {
-          toast.error('You are already a participant in this room');
-        } else {
-          throw error;
-        }
-        return;
-      }
+      if (error) throw error;
 
       toast.success(`Joined ${room.name}!`);
       await loadJoinedRooms();
@@ -377,13 +356,17 @@ const StudyRoom: React.FC<StudyRoomProps> = ({ onNavigate }) => {
 
       if (error) throw error;
 
-      // Automatically join the created room as host
+      // Automatically join the created room as host using upsert
       await supabase
         .from('room_participants')
-        .insert({
+        .upsert({
           room_id: data.id,
           user_id: user.id,
-          role: 'host'
+          role: 'host',
+          is_active: true,
+          joined_at: new Date().toISOString()
+        }, {
+          onConflict: 'room_id,user_id'
         });
 
       toast.success('Room created successfully!');

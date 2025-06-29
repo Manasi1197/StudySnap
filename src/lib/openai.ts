@@ -50,6 +50,12 @@ export interface GeneratedQuizResponse {
   }>;
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
+
 // Rate limiting helper
 let lastRequestTime = 0;
 const MIN_REQUEST_INTERVAL = 1000; // 1 second between requests
@@ -85,6 +91,101 @@ function cleanJsonResponse(content: string): string {
   }
   
   return cleaned.trim();
+}
+
+export async function generateChatResponse(
+  message: string, 
+  conversationHistory: ChatMessage[] = []
+): Promise<string> {
+  const openai = getOpenAIClient();
+  
+  console.log('🤖 Generating chat response with OpenAI...');
+  console.log('💬 User message:', message);
+  console.log('📚 Conversation history length:', conversationHistory.length);
+
+  // Create system prompt for StudySnap assistant
+  const systemPrompt = `You are StudySnap AI, a helpful and knowledgeable study assistant integrated into the StudySnap learning platform. Your role is to help students with their studies, answer questions about learning topics, provide study tips, and assist with educational content.
+
+Key guidelines:
+- Be conversational, friendly, and encouraging
+- Provide clear, concise, and helpful responses
+- Focus on educational content and study-related topics
+- If asked about StudySnap features, explain how the platform can help with studying
+- Keep responses under 150 words for natural conversation flow
+- Be supportive and motivating for students
+- If you don't know something specific, be honest and suggest alternative resources
+
+You can help with:
+- Explaining concepts and topics
+- Study strategies and techniques
+- Quiz and flashcard creation tips
+- Learning motivation and productivity
+- General academic questions
+- StudySnap platform features
+
+Remember: You're having a voice conversation, so keep responses natural and conversational.`;
+
+  // Convert conversation history to OpenAI format
+  const messages: any[] = [
+    { role: 'system', content: systemPrompt }
+  ];
+
+  // Add conversation history (limit to last 10 messages to avoid token limits)
+  const recentHistory = conversationHistory.slice(-10);
+  recentHistory.forEach(msg => {
+    messages.push({
+      role: msg.role,
+      content: msg.content
+    });
+  });
+
+  // Add current user message
+  messages.push({
+    role: 'user',
+    content: message
+  });
+
+  try {
+    console.log('📤 Sending chat request to OpenAI...');
+    const response = await rateLimitedRequest(async () => {
+      return await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 300, // Keep responses concise for voice
+        presence_penalty: 0.1,
+        frequency_penalty: 0.1
+      });
+    });
+
+    console.log('📥 Received chat response from OpenAI');
+    const content = response.choices[0]?.message?.content;
+    
+    if (!content) {
+      throw new Error('No response content from OpenAI');
+    }
+
+    console.log('✅ Chat response generated successfully');
+    return content.trim();
+
+  } catch (error: any) {
+    console.error('❌ Error generating chat response:', error);
+    
+    // Handle specific OpenAI errors
+    if (error.status === 429) {
+      throw new Error('I\'m getting too many requests right now. Please wait a moment and try again.');
+    } else if (error.status === 401) {
+      throw new Error('There\'s an issue with my configuration. Please check the API settings.');
+    } else if (error.status === 403) {
+      throw new Error('Access denied. Please check the account status.');
+    } else if (error.status === 500) {
+      throw new Error('I\'m experiencing technical difficulties. Please try again in a moment.');
+    } else if (error.code === 'insufficient_quota') {
+      throw new Error('The service quota has been exceeded. Please try again later.');
+    }
+    
+    throw new Error(`I encountered an error: ${error.message || 'Something went wrong'}`);
+  }
 }
 
 export async function generateQuizWithAI(request: GenerateQuizRequest): Promise<GeneratedQuizResponse> {

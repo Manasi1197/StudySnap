@@ -4,6 +4,7 @@ import Navigation from './components/Navigation';
 import LandingPage from './components/LandingPage';
 import Dashboard from './components/Dashboard';
 import AuthModal from './components/AuthModal';
+import ChatbotWidget from './components/ChatbotWidget';
 import { useAuth } from './hooks/useAuth';
 
 function App() {
@@ -71,6 +72,11 @@ function App() {
       )}
       
       {renderPage()}
+      
+      {/* Conversational AI Chatbot - Only show when user is logged in */}
+      {user && (
+        <ChatbotWidget isVisible={true} />
+      )}
       
       <AuthModal
         isOpen={showAuthModal}

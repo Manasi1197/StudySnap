@@ -146,8 +146,15 @@ export async function getAvailableVoices(): Promise<ElevenLabsVoice[]> {
   }
 }
 
-// Create educational script from quiz data
+// Create educational script from quiz data or simple text
 function createEducationalScript(title: string, description: string, questions: any[], flashcards: any[]): string {
+  // For chat responses, use the flashcard content as the main text
+  if (flashcards.length > 0 && flashcards[0].back && questions.length === 0) {
+    // This is a chat response
+    return flashcards[0].back;
+  }
+
+  // Original quiz-based script
   const script = `
 Welcome to your audio revision guide for ${title}.
 
@@ -300,6 +307,98 @@ export async function generateAudioWithElevenLabs(
     // For other errors, return a fallback audio URL for demonstration
     console.log('🔄 Falling back to demo audio due to error');
     return 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav';
+  }
+}
+
+// Generate simple text-to-speech for chat responses
+export async function generateChatAudio(
+  text: string,
+  onApiKeyError?: (error: ElevenLabsError) => void
+): Promise<string> {
+  console.log('🎵 Generating chat audio with ElevenLabs...');
+  console.log('📝 Text length:', text.length);
+
+  if (!ELEVENLABS_API_KEY) {
+    console.warn('❌ ElevenLabs API key not configured');
+    throw new Error('ElevenLabs API key not configured');
+  }
+
+  try {
+    // Test API key
+    const isKeyValid = await testElevenLabsApiKey();
+    if (!isKeyValid) {
+      const error: ElevenLabsError = {
+        message: 'Invalid or expired API key',
+        isExpired: true,
+        isInvalid: true
+      };
+      if (onApiKeyError) {
+        onApiKeyError(error);
+      }
+      throw error;
+    }
+
+    // Get voices
+    const voices = await getAvailableVoices();
+    const preferredVoices = ['Rachel', 'Brian', 'Sarah', 'Adam', 'Bella'];
+    let selectedVoice = voices.find(v => preferredVoices.includes(v.name));
+    
+    if (!selectedVoice && voices.length > 0) {
+      selectedVoice = voices[0];
+    }
+    
+    if (!selectedVoice) {
+      throw new Error('No voices available');
+    }
+
+    // Limit text length for chat responses
+    const maxLength = 500;
+    const truncatedText = text.length > maxLength ? text.substring(0, maxLength - 3) + '...' : text;
+
+    const requestBody: ElevenLabsAudioRequest = {
+      text: truncatedText,
+      voice_id: selectedVoice.voice_id,
+      model_id: 'eleven_monolingual_v1',
+      voice_settings: {
+        stability: 0.6,
+        similarity_boost: 0.8,
+        style: 0.2,
+        use_speaker_boost: true
+      }
+    };
+
+    const response = await fetch(`${ELEVENLABS_API_BASE_URL}/text-to-speech/${selectedVoice.voice_id}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'audio/mpeg',
+        'Content-Type': 'application/json',
+        'xi-api-key': ELEVENLABS_API_KEY,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const responseText = await response.text();
+      const error = handleElevenLabsError(response, responseText);
+      
+      if (error.isExpired || error.isInvalid) {
+        if (onApiKeyError) {
+          onApiKeyError(error);
+        }
+      }
+      
+      throw error;
+    }
+
+    const audioBlob = await response.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+    
+    console.log('✅ Chat audio generated successfully');
+    return audioUrl;
+
+  } catch (error: any) {
+    console.error('❌ Error generating chat audio:', error);
+    throw error;
   }
 }
 

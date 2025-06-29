@@ -137,15 +137,15 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
 
       {/* Compact Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 w-96 h-80 bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 z-50 transition-all duration-500">
+        <div className="fixed bottom-6 right-6 w-96 h-80 bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-200/50 z-50 transition-all duration-500">
           {/* Header with Close Button */}
           <div className="absolute top-4 right-4 z-10">
             <button
               onClick={handleClose}
-              className="w-8 h-8 bg-black/20 hover:bg-black/40 rounded-full flex items-center justify-center transition-all duration-200 backdrop-blur-sm border border-white/20"
+              className="w-8 h-8 bg-gray-100/80 hover:bg-gray-200/80 rounded-full flex items-center justify-center transition-all duration-200 backdrop-blur-sm border border-gray-300/50"
               title="Close"
             >
-              <X className="w-4 h-4 text-white" />
+              <X className="w-4 h-4 text-gray-600" />
             </button>
           </div>
 
@@ -154,11 +154,11 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
             {error ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
-                    <X className="w-8 h-8 text-red-400" />
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-200">
+                    <X className="w-8 h-8 text-red-500" />
                   </div>
-                  <h3 className="text-lg font-semibold text-white mb-2">Connection Error</h3>
-                  <p className="text-white/70 text-sm mb-4">{error}</p>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Connection Error</h3>
+                  <p className="text-gray-600 text-sm mb-4">{error}</p>
                   <button
                     onClick={getSignedUrl}
                     className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all duration-300 text-sm font-medium"
@@ -171,24 +171,24 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
                   <div className="relative w-16 h-16 mx-auto mb-4">
-                    <div className="absolute inset-0 border-4 border-white/30 rounded-full"></div>
-                    <div className="absolute inset-0 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
                     <div className="absolute inset-2 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 rounded-full flex items-center justify-center">
                       <Sparkles className="w-5 h-5 text-white animate-pulse" />
                     </div>
                   </div>
-                  <h3 className="text-lg font-semibold text-white mb-2">Connecting...</h3>
-                  <p className="text-white/70 text-sm">Setting up your AI assistant</p>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Connecting...</h3>
+                  <p className="text-gray-600 text-sm">Setting up your AI assistant</p>
                 </div>
               </div>
             ) : conversation.status === 'connected' ? (
               <div className="flex-1 flex flex-col">
                 {/* Status */}
                 <div className="text-center mb-6">
-                  <h3 className="text-lg font-bold text-white mb-2">
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">
                     {conversation.isSpeaking ? 'AI is speaking...' : 'I\'m listening'}
                   </h3>
-                  <p className="text-white/70 text-sm">
+                  <p className="text-gray-600 text-sm">
                     {conversation.isSpeaking 
                       ? 'Getting your answer ready'
                       : 'Ask me anything about your studies!'
@@ -222,11 +222,11 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
 
                 {/* Status indicator */}
                 <div className="flex items-center justify-center space-x-2 mt-4">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-white/70 text-sm font-medium">Connected</span>
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-gray-700 text-sm font-medium">Connected</span>
                   <button
                     onClick={() => setIsMuted(!isMuted)}
-                    className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded transition-all duration-200 ml-2"
+                    className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-all duration-200 ml-2"
                     title={isMuted ? 'Unmute' : 'Mute'}
                   >
                     {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -239,8 +239,8 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
                   <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-orange-500/30">
                     <Sparkles className="w-10 h-10 text-white" />
                   </div>
-                  <h3 className="text-lg font-bold text-white mb-2">Ask StudySnap</h3>
-                  <p className="text-white/70 text-sm mb-6 leading-relaxed">
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Ask StudySnap</h3>
+                  <p className="text-gray-600 text-sm mb-6 leading-relaxed">
                     I'm here to help with your questions about studies, learning materials, and academic topics!
                   </p>
                   <button

@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { MessageCircle, X, Mic, MicOff, Volume2, VolumeX, Minimize2, Maximize2 } from 'lucide-react';
+import { useConversation } from '@elevenlabs/react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
@@ -12,12 +13,26 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [conversationRef, setConversationRef] = useState<any>(null);
+
+  // Initialize the conversation hook
+  const conversation = useConversation({
+    onConnect: () => {
+      console.log('Connected to conversation');
+      toast.success('Connected to AI assistant');
+    },
+    onDisconnect: () => {
+      console.log('Disconnected from conversation');
+    },
+    onError: (error) => {
+      console.error('Conversation error:', error);
+      setError('Connection error occurred');
+      toast.error('AI assistant connection error');
+    },
+  });
 
   // Get signed URL from our Supabase Edge Function
   const getSignedUrl = async () => {
@@ -59,103 +74,45 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
     setIsOpen(true);
     
     if (!signedUrl) {
-      await getSignedUrl();
+      const url = await getSignedUrl();
+      if (url) {
+        // Start the conversation session
+        conversation.startSession({ signedUrl: url });
+      }
+    } else {
+      // Start the conversation session with existing URL
+      conversation.startSession({ signedUrl });
     }
   };
 
   // Handle closing the chatbot
   const handleClose = () => {
+    // End the conversation session
+    conversation.endSession();
+    
     setIsOpen(false);
     setIsMinimized(false);
-    setIsConnected(false);
     setSignedUrl(null);
     setError(null);
   };
 
-  // Handle connection status changes
-  const handleStatusChange = (status: any) => {
-    console.log('Conversation status:', status);
-    setIsConnected(status === 'connected');
-    
-    if (status === 'disconnected') {
-      setIsConnected(false);
+  // Toggle microphone
+  const toggleMicrophone = () => {
+    if (conversation.status === 'connected') {
+      if (conversation.isSpeaking) {
+        // Stop speaking if currently speaking
+        conversation.endSession();
+      } else {
+        // Start speaking
+        conversation.startSession({ signedUrl: signedUrl! });
+      }
     }
   };
-
-  // Handle conversation mode changes
-  const handleModeChange = (mode: any) => {
-    console.log('Conversation mode:', mode);
-  };
-
-  // Handle errors
-  const handleError = (error: any) => {
-    console.error('Conversation error:', error);
-    setError('Connection error occurred');
-    toast.error('AI assistant connection error');
-  };
-
-  // Initialize conversation when signed URL is available
-  useEffect(() => {
-    if (signedUrl && !conversationRef) {
-      // Dynamically import and initialize the conversation
-      import('@elevenlabs/react').then((module) => {
-        const Conversation = module.default;
-        if (Conversation) {
-          setConversationRef(Conversation);
-        } else {
-          console.error('Conversation component not found in @elevenlabs/react');
-          setError('Failed to load conversation component');
-        }
-      }).catch((err) => {
-        console.error('Failed to import @elevenlabs/react:', err);
-        setError('Failed to load conversation component');
-      });
-    }
-  }, [signedUrl, conversationRef]);
 
   // Don't render if user is not authenticated
   if (!user) {
     return null;
   }
-
-  // Render the conversation component
-  const renderConversation = () => {
-    if (!conversationRef || !signedUrl) {
-      return (
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading...</h3>
-            <p className="text-gray-600">Preparing conversation interface</p>
-          </div>
-        </div>
-      );
-    }
-
-    const ConversationComponent = conversationRef;
-    
-    return (
-      <div className="flex-1 relative">
-        <ConversationComponent
-          signedUrl={signedUrl}
-          onStatusChange={handleStatusChange}
-          onModeChange={handleModeChange}
-          onError={handleError}
-          style={{ width: '100%', height: '100%' }}
-        />
-        
-        {/* Connection Status Indicator */}
-        <div className="absolute top-4 right-4 flex items-center space-x-2 bg-white bg-opacity-90 rounded-full px-3 py-1">
-          <div className={`w-2 h-2 rounded-full ${
-            isConnected ? 'bg-green-500' : 'bg-red-500'
-          }`}></div>
-          <span className="text-xs text-gray-600">
-            {isConnected ? 'Connected' : 'Disconnected'}
-          </span>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <>
@@ -185,7 +142,9 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
               <div>
                 <h3 className="font-semibold text-sm">AI Study Assistant</h3>
                 <p className="text-xs text-purple-100">
-                  {isConnected ? 'Connected' : isLoading ? 'Connecting...' : 'Ready to help'}
+                  {conversation.status === 'connected' ? 'Connected' : 
+                   conversation.status === 'connecting' ? 'Connecting...' : 
+                   isLoading ? 'Loading...' : 'Ready to help'}
                 </p>
               </div>
             </div>
@@ -234,8 +193,72 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
                     <p className="text-gray-600">Setting up your AI assistant</p>
                   </div>
                 </div>
-              ) : signedUrl ? (
-                renderConversation()
+              ) : conversation.status === 'connected' ? (
+                <div className="flex-1 flex flex-col">
+                  {/* Conversation Interface */}
+                  <div className="flex-1 flex items-center justify-center p-6">
+                    <div className="text-center">
+                      <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 transition-all duration-300 ${
+                        conversation.isSpeaking 
+                          ? 'bg-green-100 animate-pulse' 
+                          : 'bg-purple-100'
+                      }`}>
+                        {conversation.isSpeaking ? (
+                          <Volume2 className="w-12 h-12 text-green-600" />
+                        ) : (
+                          <Mic className="w-12 h-12 text-purple-600" />
+                        )}
+                      </div>
+                      
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        {conversation.isSpeaking ? 'AI is speaking...' : 'Ready to listen'}
+                      </h3>
+                      
+                      <p className="text-gray-600 mb-6">
+                        {conversation.isSpeaking 
+                          ? 'The AI assistant is responding to your question'
+                          : 'Click the microphone to start talking with your AI study assistant'
+                        }
+                      </p>
+
+                      {/* Microphone Button */}
+                      <button
+                        onClick={toggleMicrophone}
+                        className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${
+                          conversation.isSpeaking
+                            ? 'bg-red-500 hover:bg-red-600 text-white'
+                            : 'bg-purple-500 hover:bg-purple-600 text-white'
+                        }`}
+                        title={conversation.isSpeaking ? 'Stop' : 'Start talking'}
+                      >
+                        {conversation.isSpeaking ? (
+                          <MicOff className="w-8 h-8" />
+                        ) : (
+                          <Mic className="w-8 h-8" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Status Bar */}
+                  <div className="border-t border-gray-200 p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm text-gray-600">Connected</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => setIsMuted(!isMuted)}
+                          className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                          title={isMuted ? 'Unmute' : 'Mute'}
+                        >
+                          {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center p-6">
                   <div className="text-center">
@@ -248,10 +271,16 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
                       study techniques, or any academic questions you have.
                     </p>
                     <button
-                      onClick={getSignedUrl}
+                      onClick={async () => {
+                        const url = await getSignedUrl();
+                        if (url) {
+                          conversation.startSession({ signedUrl: url });
+                        }
+                      }}
                       className="bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 transition-colors font-medium"
+                      disabled={isLoading}
                     >
-                      Start Conversation
+                      {isLoading ? 'Connecting...' : 'Start Conversation'}
                     </button>
                   </div>
                 </div>

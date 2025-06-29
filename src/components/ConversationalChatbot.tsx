@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import Conversation from '@elevenlabs/react';
 import { MessageCircle, X, Mic, MicOff, Volume2, VolumeX, Minimize2, Maximize2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -18,6 +17,7 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conversationRef, setConversationRef] = useState<any>(null);
 
   // Get signed URL from our Supabase Edge Function
   const getSignedUrl = async () => {
@@ -94,10 +94,68 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
     toast.error('AI assistant connection error');
   };
 
+  // Initialize conversation when signed URL is available
+  useEffect(() => {
+    if (signedUrl && !conversationRef) {
+      // Dynamically import and initialize the conversation
+      import('@elevenlabs/react').then((module) => {
+        const { Conversation } = module;
+        if (Conversation) {
+          setConversationRef(Conversation);
+        } else {
+          console.error('Conversation component not found in @elevenlabs/react');
+          setError('Failed to load conversation component');
+        }
+      }).catch((err) => {
+        console.error('Failed to import @elevenlabs/react:', err);
+        setError('Failed to load conversation component');
+      });
+    }
+  }, [signedUrl, conversationRef]);
+
   // Don't render if user is not authenticated
   if (!user) {
     return null;
   }
+
+  // Render the conversation component
+  const renderConversation = () => {
+    if (!conversationRef || !signedUrl) {
+      return (
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading...</h3>
+            <p className="text-gray-600">Preparing conversation interface</p>
+          </div>
+        </div>
+      );
+    }
+
+    const ConversationComponent = conversationRef;
+    
+    return (
+      <div className="flex-1 relative">
+        <ConversationComponent
+          signedUrl={signedUrl}
+          onStatusChange={handleStatusChange}
+          onModeChange={handleModeChange}
+          onError={handleError}
+          style={{ width: '100%', height: '100%' }}
+        />
+        
+        {/* Connection Status Indicator */}
+        <div className="absolute top-4 right-4 flex items-center space-x-2 bg-white bg-opacity-90 rounded-full px-3 py-1">
+          <div className={`w-2 h-2 rounded-full ${
+            isConnected ? 'bg-green-500' : 'bg-red-500'
+          }`}></div>
+          <span className="text-xs text-gray-600">
+            {isConnected ? 'Connected' : 'Disconnected'}
+          </span>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -177,25 +235,7 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
                   </div>
                 </div>
               ) : signedUrl ? (
-                <div className="flex-1 relative">
-                  <Conversation
-                    signedUrl={signedUrl}
-                    onStatusChange={handleStatusChange}
-                    onModeChange={handleModeChange}
-                    onError={handleError}
-                    className="w-full h-full"
-                  />
-                  
-                  {/* Connection Status Indicator */}
-                  <div className="absolute top-4 right-4 flex items-center space-x-2">
-                    <div className={`w-2 h-2 rounded-full ${
-                      isConnected ? 'bg-green-500' : 'bg-red-500'
-                    }`}></div>
-                    <span className="text-xs text-gray-600">
-                      {isConnected ? 'Connected' : 'Disconnected'}
-                    </span>
-                  </div>
-                </div>
+                renderConversation()
               ) : (
                 <div className="flex-1 flex items-center justify-center p-6">
                   <div className="text-center">

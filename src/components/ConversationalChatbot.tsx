@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import Conversation from '@elevenlabs/react';
+import { Conversation } from '@elevenlabs/react';
 import { MessageCircle, X, Mic, MicOff, Volume2, VolumeX, Minimize2, Maximize2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';

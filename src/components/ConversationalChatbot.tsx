@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageCircle, X, Mic, MicOff, Volume2, VolumeX, Sparkles } from 'lucide-react';
+import { MessageCircle, X, Mic, MicOff, Volume2, VolumeX, Sparkles, Phone } from 'lucide-react';
 import { useConversation } from '@elevenlabs/react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -16,6 +16,7 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isCallReady, setIsCallReady] = useState(false);
 
   // Initialize the conversation hook
   const conversation = useConversation({
@@ -49,6 +50,7 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
 
       if (data?.signed_url) {
         setSignedUrl(data.signed_url);
+        setIsCallReady(true);
         return data.signed_url;
       } else {
         throw new Error('No signed URL received');
@@ -63,7 +65,7 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
     }
   };
 
-  // Handle opening the chatbot
+  // Handle opening the chatbot (just opens the window, doesn't start call)
   const handleOpen = async () => {
     if (!user) {
       toast.error('Please sign in to use the AI assistant');
@@ -72,12 +74,15 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
 
     setIsOpen(true);
     
+    // Only get signed URL, don't start the session yet
     if (!signedUrl) {
-      const url = await getSignedUrl();
-      if (url) {
-        conversation.startSession({ signedUrl: url });
-      }
-    } else {
+      await getSignedUrl();
+    }
+  };
+
+  // Handle starting the actual conversation
+  const handleStartCall = () => {
+    if (signedUrl) {
       conversation.startSession({ signedUrl });
     }
   };
@@ -88,6 +93,7 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
     setIsOpen(false);
     setSignedUrl(null);
     setError(null);
+    setIsCallReady(false);
   };
 
   // Toggle microphone and stop conversation
@@ -95,7 +101,7 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
     if (conversation.status === 'connected') {
       // Stop the conversation when microphone is clicked
       conversation.endSession();
-      handleClose();
+      toast.success('Call ended');
     }
   };
 
@@ -177,7 +183,7 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
                       <Sparkles className="w-5 h-5 text-white animate-pulse" />
                     </div>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Connecting...</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Preparing...</h3>
                   <p className="text-gray-600 text-sm">Setting up your AI assistant</p>
                 </div>
               </div>
@@ -205,7 +211,7 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
                         ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-2xl shadow-red-500/40'
                         : 'bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 shadow-2xl shadow-purple-500/40'
                     }`}
-                    title={conversation.isSpeaking ? 'Stop conversation' : 'Stop conversation'}
+                    title="End conversation"
                   >
                     {conversation.isSpeaking ? (
                       <MicOff className="w-10 h-10 text-white" />
@@ -243,25 +249,36 @@ const ConversationalChatbot: React.FC<ConversationalChatbotProps> = ({ agentId }
                   <p className="text-gray-600 text-sm mb-6 leading-relaxed">
                     I'm here to help with your questions about studies, learning materials, and academic topics!
                   </p>
+                  
+                  {/* Call Button */}
                   <button
-                    onClick={async () => {
-                      const url = await getSignedUrl();
-                      if (url) {
-                        conversation.startSession({ signedUrl: url });
-                      }
-                    }}
-                    className="bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white px-6 py-3 rounded-xl hover:from-purple-600 hover:via-pink-600 hover:to-orange-500 transition-all duration-300 font-semibold shadow-2xl shadow-purple-500/30 transform hover:scale-105"
+                    onClick={isCallReady ? handleStartCall : getSignedUrl}
+                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-300 font-semibold shadow-2xl shadow-green-500/30 transform hover:scale-105 flex items-center space-x-2 mx-auto"
                     disabled={isLoading}
                   >
                     {isLoading ? (
-                      <span className="flex items-center space-x-2">
+                      <>
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Connecting...</span>
-                      </span>
+                        <span>Preparing...</span>
+                      </>
+                    ) : isCallReady ? (
+                      <>
+                        <Phone className="w-5 h-5" />
+                        <span>Start Call</span>
+                      </>
                     ) : (
-                      'Start Asking'
+                      <>
+                        <Sparkles className="w-5 h-5" />
+                        <span>Get Ready</span>
+                      </>
                     )}
                   </button>
+                  
+                  {isCallReady && (
+                    <p className="text-green-600 text-xs mt-2 font-medium">
+                      ✓ Ready to start your conversation
+                    </p>
+                  )}
                 </div>
               </div>
             )}
